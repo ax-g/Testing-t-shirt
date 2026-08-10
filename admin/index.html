@@ -1,1 +1,616 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Admin — Testing T-Shirt</title>
+<link rel="icon" href="logo.png">
+<style>
+  :root{
+    --black:#111111;
+    --gray-900:#1a1a1a;
+    --gray-700:#404040;
+    --gray-500:#737373;
+    --gray-300:#d4d4d4;
+    --gray-100:#f5f5f5;
+    --gray-50:#fafafa;
+    --white:#ffffff;
+    --danger:#dc2626;
+    --success:#16a34a;
+    --warning:#d97706;
+    --radius:14px;
+    --radius-sm:8px;
+    --shadow:0 1px 3px rgba(0,0,0,0.06), 0 1px 2px rgba(0,0,0,0.04);
+    --shadow-md:0 4px 12px rgba(0,0,0,0.08);
+    font-family:-apple-system,BlinkMacSystemFont,'Inter',Segoe UI,Roboto,Helvetica,Arial,sans-serif;
+  }
+  *{box-sizing:border-box;margin:0;padding:0;}
+  body{background:var(--gray-50);color:var(--black);font-size:14px;line-height:1.5;}
+  a{text-decoration:none;color:inherit;}
+  button{font-family:inherit;cursor:pointer;border:none;background:none;}
+  input,select,textarea{font-family:inherit;font-size:14px;}
 
+  /* ===== LOGIN SCREEN ===== */
+  #loginScreen{
+    min-height:100vh;display:flex;align-items:center;justify-content:center;
+    background:var(--black);padding:20px;
+  }
+  .login-card{
+    background:var(--white);border-radius:20px;padding:40px 32px;width:100%;max-width:380px;
+    box-shadow:0 20px 60px rgba(0,0,0,0.3);
+  }
+  .login-logo{text-align:center;margin-bottom:28px;}
+  .login-logo img{height:36px;object-fit:contain;}
+  .login-logo .fallback{font-weight:800;font-size:20px;letter-spacing:-0.5px;}
+  .login-title{font-size:22px;font-weight:700;margin-bottom:4px;text-align:center;}
+  .login-sub{color:var(--gray-500);font-size:13px;text-align:center;margin-bottom:28px;}
+  .field{margin-bottom:16px;}
+  .field label{display:block;font-size:12px;font-weight:600;color:var(--gray-700);margin-bottom:6px;text-transform:uppercase;letter-spacing:0.3px;}
+  .field input, .field select, .field textarea{
+    width:100%;padding:12px 14px;border:1.5px solid var(--gray-300);border-radius:var(--radius-sm);
+    font-size:14px;transition:border-color 0.15s;background:var(--white);
+  }
+  .field input:focus, .field select:focus, .field textarea:focus{outline:none;border-color:var(--black);}
+  .btn{
+    display:inline-flex;align-items:center;justify-content:center;gap:8px;
+    padding:13px 20px;border-radius:var(--radius-sm);font-weight:600;font-size:14px;
+    transition:all 0.15s;white-space:nowrap;
+  }
+  .btn-primary{background:var(--black);color:var(--white);width:100%;}
+  .btn-primary:hover{background:var(--gray-900);}
+  .btn-primary:disabled{opacity:0.5;cursor:not-allowed;}
+  .btn-outline{background:var(--white);color:var(--black);border:1.5px solid var(--gray-300);}
+  .btn-outline:hover{border-color:var(--black);}
+  .btn-danger{background:var(--danger);color:var(--white);}
+  .btn-sm{padding:8px 14px;font-size:13px;}
+  .login-error{
+    background:#fef2f2;color:var(--danger);padding:10px 14px;border-radius:var(--radius-sm);
+    font-size:13px;margin-bottom:16px;display:none;
+  }
+
+  /* ===== ADMIN LAYOUT ===== */
+  #adminApp{display:none;min-height:100vh;}
+  .admin-shell{display:flex;min-height:100vh;}
+
+  .sidebar{
+    width:240px;background:var(--black);color:var(--white);flex-shrink:0;
+    display:flex;flex-direction:column;position:fixed;top:0;bottom:0;left:0;z-index:100;
+    transition:transform 0.25s;
+  }
+  .sidebar-logo{padding:24px 20px;border-bottom:1px solid #2a2a2a;}
+  .sidebar-logo img{height:28px;filter:brightness(0) invert(1);object-fit:contain;}
+  .sidebar-logo .fallback{font-weight:800;font-size:17px;letter-spacing:-0.5px;}
+  .sidebar-nav{flex:1;padding:16px 12px;overflow-y:auto;}
+  .nav-item{
+    display:flex;align-items:center;gap:12px;padding:11px 14px;border-radius:10px;
+    color:#a3a3a3;font-size:14px;font-weight:500;margin-bottom:2px;transition:all 0.15s;cursor:pointer;
+  }
+  .nav-item:hover{background:#1f1f1f;color:var(--white);}
+  .nav-item.active{background:var(--white);color:var(--black);}
+  .nav-item svg{width:18px;height:18px;flex-shrink:0;}
+  .sidebar-footer{padding:16px 12px;border-top:1px solid #2a2a2a;}
+  .admin-email{font-size:12px;color:#a3a3a3;padding:0 14px 10px;word-break:break-all;}
+
+  .main{flex:1;margin-left:240px;padding:28px 32px;max-width:1400px;}
+  .topbar{display:flex;align-items:center;justify-content:space-between;margin-bottom:24px;}
+  .page-title{font-size:24px;font-weight:700;letter-spacing:-0.5px;}
+  .page-sub{color:var(--gray-500);font-size:13px;margin-top:2px;}
+  .menu-toggle{display:none;}
+
+  .page{display:none;}
+  .page.active{display:block;}
+
+  /* ===== DASHBOARD ===== */
+  .stats-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:16px;margin-bottom:28px;}
+  .stat-card{
+    background:var(--white);border-radius:var(--radius);padding:20px;box-shadow:var(--shadow);
+  }
+  .stat-label{font-size:12px;color:var(--gray-500);font-weight:600;text-transform:uppercase;letter-spacing:0.3px;margin-bottom:8px;}
+  .stat-value{font-size:28px;font-weight:800;letter-spacing:-1px;}
+  .stat-icon{width:36px;height:36px;border-radius:10px;display:flex;align-items:center;justify-content:center;margin-bottom:12px;background:var(--gray-100);}
+  .stat-icon svg{width:18px;height:18px;}
+
+  .card{background:var(--white);border-radius:var(--radius);box-shadow:var(--shadow);overflow:hidden;}
+  .card-header{padding:18px 20px;border-bottom:1px solid var(--gray-100);display:flex;align-items:center;justify-content:space-between;}
+  .card-title{font-size:16px;font-weight:700;}
+
+  table{width:100%;border-collapse:collapse;}
+  th{text-align:left;padding:12px 20px;font-size:11px;font-weight:700;color:var(--gray-500);text-transform:uppercase;letter-spacing:0.4px;border-bottom:1px solid var(--gray-100);}
+  td{padding:14px 20px;font-size:13px;border-bottom:1px solid var(--gray-100);}
+  tr:last-child td{border-bottom:none;}
+  tr:hover td{background:var(--gray-50);}
+
+  .badge{display:inline-flex;align-items:center;padding:4px 10px;border-radius:20px;font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:0.3px;}
+  .badge-pending{background:#fef3c7;color:#92400e;}
+  .badge-confirmed{background:#dbeafe;color:#1e40af;}
+  .badge-processing{background:#e0e7ff;color:#4338ca;}
+  .badge-shipped{background:#cffafe;color:#155e75;}
+  .badge-delivered{background:#dcfce7;color:#166534;}
+  .badge-cancelled{background:#fee2e2;color:#991b1b;}
+  .badge-paid{background:#dcfce7;color:#166534;}
+  .badge-unpaid{background:#fef3c7;color:#92400e;}
+  .badge-active{background:#dcfce7;color:#166534;}
+  .badge-hidden{background:var(--gray-100);color:var(--gray-700);}
+  .badge-oos{background:#fee2e2;color:#991b1b;}
+
+  /* ===== PRODUCTS ===== */
+  .toolbar{display:flex;gap:12px;margin-bottom:20px;flex-wrap:wrap;align-items:center;justify-content:space-between;}
+  .search-box{position:relative;flex:1;max-width:320px;}
+  .search-box input{width:100%;padding:10px 14px 10px 38px;border:1.5px solid var(--gray-300);border-radius:10px;font-size:13px;}
+  .search-box svg{position:absolute;left:12px;top:50%;transform:translateY(-50%);width:16px;height:16px;color:var(--gray-500);}
+
+  .product-thumb{width:44px;height:44px;border-radius:8px;object-fit:cover;background:var(--gray-100);}
+  .row-flex{display:flex;align-items:center;gap:10px;}
+  .icon-btn{width:32px;height:32px;border-radius:8px;display:inline-flex;align-items:center;justify-content:center;transition:background 0.15s;}
+  .icon-btn:hover{background:var(--gray-100);}
+  .icon-btn svg{width:16px;height:16px;}
+
+  /* ===== MODAL / DRAWER ===== */
+  .overlay{
+    display:none;position:fixed;inset:0;background:rgba(0,0,0,0.5);z-index:200;
+    align-items:center;justify-content:center;padding:20px;
+  }
+  .overlay.active{display:flex;}
+  .modal{
+    background:var(--white);border-radius:20px;width:100%;max-width:720px;max-height:90vh;
+    display:flex;flex-direction:column;overflow:hidden;
+  }
+  .modal-header{padding:20px 24px;border-bottom:1px solid var(--gray-100);display:flex;align-items:center;justify-content:space-between;flex-shrink:0;}
+  .modal-title{font-size:18px;font-weight:700;}
+  .modal-close{width:32px;height:32px;border-radius:50%;display:flex;align-items:center;justify-content:center;}
+  .modal-close:hover{background:var(--gray-100);}
+  .modal-body{padding:24px;overflow-y:auto;flex:1;}
+  .modal-footer{padding:16px 24px;border-top:1px solid var(--gray-100);display:flex;gap:10px;justify-content:flex-end;flex-shrink:0;}
+
+  .form-section{margin-bottom:24px;}
+  .form-section-title{font-size:13px;font-weight:700;text-transform:uppercase;letter-spacing:0.4px;color:var(--gray-500);margin-bottom:14px;padding-bottom:8px;border-bottom:1px solid var(--gray-100);}
+  .form-grid{display:grid;grid-template-columns:1fr 1fr;gap:14px;}
+  .form-grid .full{grid-column:1/-1;}
+  .toggle-row{display:flex;align-items:center;justify-content:space-between;padding:10px 0;}
+  .switch{position:relative;width:44px;height:24px;flex-shrink:0;}
+  .switch input{opacity:0;width:0;height:0;}
+  .slider{position:absolute;inset:0;background:var(--gray-300);border-radius:24px;cursor:pointer;transition:0.2s;}
+  .slider:before{content:'';position:absolute;width:18px;height:18px;left:3px;top:3px;background:var(--white);border-radius:50%;transition:0.2s;}
+  input:checked + .slider{background:var(--black);}
+  input:checked + .slider:before{transform:translateX(20px);}
+  .chip-input{display:flex;flex-wrap:wrap;gap:8px;padding:10px;border:1.5px solid var(--gray-300);border-radius:var(--radius-sm);min-height:44px;}
+  .chip{background:var(--gray-100);padding:5px 10px 5px 12px;border-radius:20px;font-size:12px;font-weight:600;display:flex;align-items:center;gap:6px;}
+  .chip button{width:16px;height:16px;display:flex;align-items:center;justify-content:center;color:var(--gray-500);}
+  .chip-input input{border:none;flex:1;min-width:80px;padding:4px;}
+  .chip-input input:focus{outline:none;}
+  .hint{font-size:11.5px;color:var(--gray-500);margin-top:5px;}
+
+  .empty-state{text-align:center;padding:60px 20px;color:var(--gray-500);}
+  .empty-state svg{width:48px;height:48px;margin-bottom:12px;color:var(--gray-300);}
+
+  .toast{
+    position:fixed;bottom:24px;left:50%;transform:translateX(-50%) translateY(100px);
+    background:var(--black);color:var(--white);padding:14px 22px;border-radius:12px;
+    font-size:13px;font-weight:600;z-index:300;transition:transform 0.3s;box-shadow:0 8px 24px rgba(0,0,0,0.2);
+    display:flex;align-items:center;gap:10px;
+  }
+  .toast.show{transform:translateX(-50%) translateY(0);}
+  .toast.error{background:var(--danger);}
+  .toast.success{background:var(--success);}
+
+  .spinner{width:18px;height:18px;border:2px solid rgba(255,255,255,0.3);border-top-color:#fff;border-radius:50%;animation:spin 0.7s linear infinite;}
+  .spinner-dark{border:2px solid var(--gray-300);border-top-color:var(--black);}
+  @keyframes spin{to{transform:rotate(360deg);}}
+  #globalLoader{display:none;position:fixed;inset:0;background:rgba(255,255,255,0.8);z-index:400;align-items:center;justify-content:center;}
+  #globalLoader.active{display:flex;}
+
+  select{width:100%;padding:12px 14px;border:1.5px solid var(--gray-300);border-radius:var(--radius-sm);background:var(--white);}
+
+  @media (max-width:900px){
+    .sidebar{transform:translateX(-100%);}
+    .sidebar.open{transform:translateX(0);}
+    .main{margin-left:0;padding:20px 16px;}
+    .menu-toggle{display:flex;width:38px;height:38px;align-items:center;justify-content:center;background:var(--white);border-radius:10px;box-shadow:var(--shadow);}
+    .stats-grid{grid-template-columns:repeat(2,1fr);}
+    .form-grid{grid-template-columns:1fr;}
+    table{font-size:12px;}
+    th,td{padding:10px 12px;}
+    .sidebar-backdrop{display:none;position:fixed;inset:0;background:rgba(0,0,0,0.4);z-index:99;}
+    .sidebar-backdrop.active{display:block;}
+  }
+</style>
+</head>
+<body>
+
+<!-- ============ LOGIN SCREEN ============ -->
+<div id="loginScreen">
+  <div class="login-card">
+    <div class="login-logo">
+      <img src="logo.png" alt="Testing T-Shirt" onerror="this.style.display='none';this.nextElementSibling.style.display='block';">
+      <div class="fallback" style="display:none;">TESTING T-SHIRT</div>
+    </div>
+    <div class="login-title">Admin Panel</div>
+    <div class="login-sub">Sign in to manage your store</div>
+    <div class="login-error" id="loginError"></div>
+    <div class="field">
+      <label>Email</label>
+      <input type="email" id="loginEmail" placeholder="admin@example.com" autocomplete="username">
+    </div>
+    <div class="field">
+      <label>Password</label>
+      <input type="password" id="loginPassword" placeholder="••••••••" autocomplete="current-password">
+    </div>
+    <button class="btn btn-primary" id="loginBtn" onclick="handleLogin()">
+      <span id="loginBtnText">Sign In</span>
+    </button>
+  </div>
+</div>
+
+<!-- ============ ADMIN APP ============ -->
+<div id="adminApp">
+  <div class="admin-shell">
+    <div class="sidebar-backdrop" id="sidebarBackdrop" onclick="toggleSidebar(false)"></div>
+    <aside class="sidebar" id="sidebar">
+      <div class="sidebar-logo">
+        <img src="logo.png" alt="Testing T-Shirt" onerror="this.style.display='none';this.nextElementSibling.style.display='block';">
+        <div class="fallback" style="display:none;">TESTING T-SHIRT</div>
+      </div>
+      <nav class="sidebar-nav">
+        <div class="nav-item active" data-page="dashboard" onclick="navigate('dashboard')">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="7" height="9" rx="1"/><rect x="14" y="3" width="7" height="5" rx="1"/><rect x="14" y="12" width="7" height="9" rx="1"/><rect x="3" y="16" width="7" height="5" rx="1"/></svg>
+          Dashboard
+        </div>
+        <div class="nav-item" data-page="products" onclick="navigate('products')">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20.5 7.3l-8-4.6a1 1 0 0 0-1 0l-8 4.6a1 1 0 0 0-.5.9v7.6a1 1 0 0 0 .5.9l8 4.6a1 1 0 0 0 1 0l8-4.6a1 1 0 0 0 .5-.9V8.2a1 1 0 0 0-.5-.9z"/><path d="M3.5 7.3L12 12l8.5-4.7M12 22V12"/></svg>
+          Products
+        </div>
+        <div class="nav-item" data-page="orders" onclick="navigate('orders')">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M6 2L3 6v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V6l-3-4z"/><path d="M3 6h18M16 10a4 4 0 0 1-8 0"/></svg>
+          Orders
+        </div>
+        <div class="nav-item" data-page="settings" onclick="navigate('settings')">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
+          Settings
+        </div>
+      </nav>
+      <div class="sidebar-footer">
+        <div class="admin-email" id="adminEmailDisplay"></div>
+        <button class="btn btn-outline btn-sm" style="width:100%;background:transparent;color:#fff;border-color:#333;" onclick="handleLogout()">Sign Out</button>
+      </div>
+    </aside>
+
+    <main class="main">
+      <!-- DASHBOARD PAGE -->
+      <div class="page active" id="page-dashboard">
+        <div class="topbar">
+          <button class="menu-toggle" onclick="toggleSidebar(true)">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 12h18M3 6h18M3 18h18"/></svg>
+          </button>
+          <div>
+            <div class="page-title">Dashboard</div>
+            <div class="page-sub">Store overview and recent activity</div>
+          </div>
+        </div>
+        <div class="stats-grid">
+          <div class="stat-card">
+            <div class="stat-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20.5 7.3l-8-4.6a1 1 0 0 0-1 0l-8 4.6a1 1 0 0 0-.5.9v7.6a1 1 0 0 0 .5.9l8 4.6a1 1 0 0 0 1 0l8-4.6a1 1 0 0 0 .5-.9V8.2a1 1 0 0 0-.5-.9z"/></svg></div>
+            <div class="stat-label">Total Products</div>
+            <div class="stat-value" id="statProducts">—</div>
+          </div>
+          <div class="stat-card">
+            <div class="stat-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M6 2L3 6v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V6l-3-4z"/></svg></div>
+            <div class="stat-label">Total Orders</div>
+            <div class="stat-value" id="statOrders">—</div>
+          </div>
+          <div class="stat-card">
+            <div class="stat-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><path d="M12 6v6l4 2"/></svg></div>
+            <div class="stat-label">Pending Orders</div>
+            <div class="stat-value" id="statPending">—</div>
+          </div>
+          <div class="stat-card">
+            <div class="stat-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 1v22M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/></svg></div>
+            <div class="stat-label">Total Sales</div>
+            <div class="stat-value" id="statSales">—</div>
+          </div>
+        </div>
+        <div class="card">
+          <div class="card-header">
+            <div class="card-title">Recent Orders</div>
+            <a onclick="navigate('orders')" style="font-size:13px;font-weight:600;cursor:pointer;">View all →</a>
+          </div>
+          <div style="overflow-x:auto;">
+            <table>
+              <thead><tr><th>Order ID</th><th>Customer</th><th>Date</th><th>Total</th><th>Payment</th><th>Status</th></tr></thead>
+              <tbody id="recentOrdersBody"><tr><td colspan="6" style="text-align:center;color:var(--gray-500);">Loading...</td></tr></tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+
+      <!-- PRODUCTS PAGE -->
+      <div class="page" id="page-products">
+        <div class="topbar">
+          <button class="menu-toggle" onclick="toggleSidebar(true)">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 12h18M3 6h18M3 18h18"/></svg>
+          </button>
+          <div>
+            <div class="page-title">Products</div>
+            <div class="page-sub">Manage your T-shirt catalog</div>
+          </div>
+        </div>
+        <div class="toolbar">
+          <div class="search-box">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><path d="M21 21l-4.35-4.35"/></svg>
+            <input type="text" id="productSearch" placeholder="Search products..." oninput="renderProductsTable()">
+          </div>
+          <button class="btn btn-primary" onclick="openProductModal()">+ Add Product</button>
+        </div>
+        <div class="card">
+          <div style="overflow-x:auto;">
+            <table>
+              <thead><tr><th>Product</th><th>Category</th><th>Price</th><th>Stock</th><th>Status</th><th>Actions</th></tr></thead>
+              <tbody id="productsTableBody"><tr><td colspan="6" style="text-align:center;color:var(--gray-500);">Loading...</td></tr></tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+
+      <!-- ORDERS PAGE -->
+      <div class="page" id="page-orders">
+        <div class="topbar">
+          <button class="menu-toggle" onclick="toggleSidebar(true)">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 12h18M3 6h18M3 18h18"/></svg>
+          </button>
+          <div>
+            <div class="page-title">Orders</div>
+            <div class="page-sub">Track and manage customer orders</div>
+          </div>
+        </div>
+        <div class="toolbar">
+          <div class="search-box">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><path d="M21 21l-4.35-4.35"/></svg>
+            <input type="text" id="orderSearch" placeholder="Search by order ID or customer..." oninput="renderOrdersTable()">
+          </div>
+          <select id="orderStatusFilter" style="width:auto;" onchange="renderOrdersTable()">
+            <option value="">All Statuses</option>
+            <option value="Pending">Pending</option>
+            <option value="Confirmed">Confirmed</option>
+            <option value="Processing">Processing</option>
+            <option value="Shipped">Shipped</option>
+            <option value="Delivered">Delivered</option>
+            <option value="Cancelled">Cancelled</option>
+          </select>
+        </div>
+        <div class="card">
+          <div style="overflow-x:auto;">
+            <table>
+              <thead><tr><th>Order ID</th><th>Customer</th><th>Date</th><th>Total</th><th>Payment</th><th>Status</th><th></th></tr></thead>
+              <tbody id="ordersTableBody"><tr><td colspan="7" style="text-align:center;color:var(--gray-500);">Loading...</td></tr></tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+
+      <!-- SETTINGS PAGE -->
+      <div class="page" id="page-settings">
+        <div class="topbar">
+          <button class="menu-toggle" onclick="toggleSidebar(true)">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 12h18M3 6h18M3 18h18"/></svg>
+          </button>
+          <div>
+            <div class="page-title">Settings</div>
+            <div class="page-sub">Store configuration</div>
+          </div>
+        </div>
+        <div class="card" style="max-width:520px;">
+          <div class="card-header"><div class="card-title">Store Configuration</div></div>
+          <div style="padding:20px;">
+            <div class="field">
+              <label>Order Notification Email</label>
+              <input type="email" id="notifyEmail" placeholder="you@example.com">
+              <div class="hint">Admin receives an email here whenever a new order is placed.</div>
+            </div>
+            <div class="field">
+              <label>Store Name</label>
+              <input type="text" id="storeName" placeholder="Testing T-Shirt">
+            </div>
+            <div class="field">
+              <label>Currency Symbol</label>
+              <input type="text" id="storeCurrency" placeholder="₹">
+            </div>
+            <button class="btn btn-primary" onclick="saveSettings()">Save Settings</button>
+          </div>
+        </div>
+      </div>
+    </main>
+  </div>
+</div>
+
+<!-- ============ PRODUCT MODAL ============ -->
+<div class="overlay" id="productModalOverlay">
+  <div class="modal">
+    <div class="modal-header">
+      <div class="modal-title" id="productModalTitle">Add Product</div>
+      <button class="modal-close" onclick="closeProductModal()">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 6L6 18M6 6l12 12"/></svg>
+      </button>
+    </div>
+    <div class="modal-body">
+      <input type="hidden" id="productId">
+
+      <div class="form-section">
+        <div class="form-section-title">Basic Information</div>
+        <div class="form-grid">
+          <div class="field full">
+            <label>Product Name *</label>
+            <input type="text" id="pName" placeholder="Classic Cotton Crew Tee">
+          </div>
+          <div class="field full">
+            <label>Description</label>
+            <textarea id="pDescription" rows="3" placeholder="Soft 100% cotton, regular fit..."></textarea>
+          </div>
+          <div class="field">
+            <label>Category</label>
+            <input type="text" id="pCategory" placeholder="T-Shirts">
+          </div>
+        </div>
+      </div>
+
+      <div class="form-section">
+        <div class="form-section-title">Pricing</div>
+        <div class="form-grid">
+          <div class="field">
+            <label>Price *</label>
+            <input type="number" id="pPrice" placeholder="599" step="0.01">
+          </div>
+          <div class="field">
+            <label>Original Price</label>
+            <input type="number" id="pOriginalPrice" placeholder="799" step="0.01">
+          </div>
+          <div class="field full">
+            <div class="toggle-row">
+              <label style="margin:0;">Sale Enabled</label>
+              <label class="switch"><input type="checkbox" id="pSaleEnabled" onchange="toggleSaleFields()"><span class="slider"></span></label>
+            </div>
+          </div>
+          <div class="field" id="saleFieldsWrap1" style="display:none;">
+            <label>Sale Price</label>
+            <input type="number" id="pSalePrice" placeholder="499" step="0.01">
+          </div>
+          <div class="field" id="saleFieldsWrap2" style="display:none;">
+            <label>Discount %</label>
+            <input type="number" id="pDiscountPercent" placeholder="20">
+          </div>
+          <div class="field full">
+            <label>Offer Text</label>
+            <input type="text" id="pOfferText" placeholder="Buy 2 Get 10% Off">
+          </div>
+        </div>
+      </div>
+
+      <div class="form-section">
+        <div class="form-section-title">Media (Image 1 required, others optional)</div>
+        <div class="form-grid">
+          <div class="field full">
+            <label>Image 1 URL *</label>
+            <input type="url" id="pImage1" placeholder="https://...">
+          </div>
+          <div class="field">
+            <label>Image 2 URL</label>
+            <input type="url" id="pImage2" placeholder="https://...">
+          </div>
+          <div class="field">
+            <label>Image 3 URL</label>
+            <input type="url" id="pImage3" placeholder="https://...">
+          </div>
+          <div class="field">
+            <label>Image 4 URL</label>
+            <input type="url" id="pImage4" placeholder="https://...">
+          </div>
+          <div class="field">
+            <label>Video URL</label>
+            <input type="url" id="pVideoUrl" placeholder="https://...mp4">
+          </div>
+          <div class="hint full" style="grid-column:1/-1;">Leave optional fields blank if not available — the customer page automatically hides missing media.</div>
+        </div>
+      </div>
+
+      <div class="form-section">
+        <div class="form-section-title">Variants</div>
+        <div class="form-grid">
+          <div class="field full">
+            <label>Colors</label>
+            <div class="chip-input" id="colorChipInput">
+              <input type="text" id="colorInput" placeholder="Type a color and press Enter" onkeydown="handleChipInput(event,'color')">
+            </div>
+          </div>
+          <div class="field full">
+            <label>Sizes</label>
+            <div class="chip-input" id="sizeChipInput">
+              <input type="text" id="sizeInput" placeholder="e.g. S, M, L, XL, XXL — press Enter" onkeydown="handleChipInput(event,'size')">
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="form-section">
+        <div class="form-section-title">Inventory</div>
+        <div class="form-grid">
+          <div class="field">
+            <label>Stock Quantity</label>
+            <input type="number" id="pStock" placeholder="50">
+          </div>
+        </div>
+      </div>
+
+      <div class="form-section">
+        <div class="form-section-title">Visibility</div>
+        <div class="form-grid">
+          <div class="field full">
+            <select id="pVisibility">
+              <option value="active">Active (visible in store)</option>
+              <option value="hidden">Hidden</option>
+              <option value="out_of_stock">Out of Stock</option>
+            </select>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-outline" onclick="closeProductModal()">Cancel</button>
+      <button class="btn btn-primary" id="saveProductBtn" onclick="saveProduct()">Save Product</button>
+    </div>
+  </div>
+</div>
+
+<!-- ============ ORDER DETAIL MODAL ============ -->
+<div class="overlay" id="orderModalOverlay">
+  <div class="modal">
+    <div class="modal-header">
+      <div class="modal-title">Order Details</div>
+      <button class="modal-close" onclick="closeOrderModal()">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 6L6 18M6 6l12 12"/></svg>
+      </button>
+    </div>
+    <div class="modal-body" id="orderModalBody"></div>
+    <div class="modal-footer">
+      <button class="btn btn-outline" onclick="closeOrderModal()">Close</button>
+    </div>
+  </div>
+</div>
+
+<div class="toast" id="toast"></div>
+<div id="globalLoader"><div class="spinner spinner-dark"></div></div>
+
+<!-- ============ FIREBASE ============ -->
+<script type="module">
+  import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js";
+  import {
+    getAuth, signInWithEmailAndPassword, onAuthStateChanged, signOut
+  } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js";
+  import {
+    getFirestore, collection, doc, getDoc, getDocs, addDoc, updateDoc, deleteDoc,
+    query, orderBy, onSnapshot, serverTimestamp, setDoc, limit
+  } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
+
+  // =====================================================
+  // PASTE YOUR FIREBASE CONFIG HERE (from Firebase Console)
+  // =====================================================
+const firebaseConfig = {
+  apiKey: "AIzaSyCufV_4Cb80GR_lKOuo2tpvnqhx6sFkrUg",
+  authDomain: "testing-t-shirt.firebaseapp.com",
+  projectId: "testing-t-shirt",
+  storageBucket: "testing-t-shirt.firebasestorage.app",
+  messagingSenderId: "1001259932270",
+  appId: "1:1001259932270:web:60cac8c3b5e8d155f5e47f"
+};
+
+  const app = initializeApp(firebaseConfig);
+  const auth = getAuth(app);
+  const db = getFirestore(app);
+
+  // Expose to global scope for inline onclick handlers
+  window._fb = { app, auth, db,
+    signInWithEmailAndPassword, onAuthStateChanged, signOut,
+    collection, doc, getDoc, getDocs, addDoc, updateDoc, deleteDoc,
+    query, orderBy, onSnapshot, serverTimestamp, setDoc, limit
+  };
+</script>
+<script src="admin.js"></script>
+</body>
+</html>
