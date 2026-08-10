@@ -39,6 +39,17 @@ function escapeHtml(s){
   return String(s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 }
 function effectivePrice(p){ return p.saleEnabled && p.salePrice ? p.salePrice : p.price; }
+function getStock(p){
+  // Handles stock saved as number, numeric string, or missing entirely.
+  const raw = p.stock;
+  if(raw === undefined || raw === null || raw === '') return 999; // unknown stock = don't block purchase
+  const n = Number(raw);
+  return isNaN(n) ? 999 : n;
+}
+function isOutOfStock(p){
+  if(p.visibility === 'out_of_stock') return true;
+  return getStock(p) <= 0;
+}
 
 /* ---------------- CART PERSISTENCE (in-memory + localStorage-free) ---------------- */
 // Note: per artifact/browser rules we avoid localStorage in artifacts, but this is a
@@ -100,13 +111,25 @@ function filterCategory(cat){
 window.filterCategory = filterCategory;
 
 function renderHomeProducts(){
-  const searchVal = ($('searchInput')?.value || '').toLowerCase();
+  const searchVal = ($('searchInput')?.value || '').trim().toLowerCase();
+  const isSearching = searchVal.length > 0;
+
+  // While searching, hide the Sale/New curated rows and show one unified result grid
+  // so the customer sees search results immediately instead of scrolling past
+  // unrelated sections that still show unfiltered items.
+  $('saleSection').style.display = isSearching ? 'none' : ($('saleSection').dataset.hasItems === '1' ? 'block' : 'none');
+  $('newSection').style.display = isSearching ? 'none' : ($('newSection').dataset.hasItems === '1' ? 'block' : 'none');
+
   const filtered = allProducts.filter(p => {
-    const matchSearch = (p.name||'').toLowerCase().includes(searchVal);
+    const matchSearch = !isSearching || (p.name||'').trim().toLowerCase().includes(searchVal);
     const matchCat = !activeCategory || p.category === activeCategory;
     return matchSearch && matchCat;
   });
+
   const grid = $('allGrid');
+  const heading = document.querySelector('#allGrid').parentElement.querySelector('.section-title');
+  if(heading) heading.textContent = isSearching ? `Results for "${searchVal}"` : 'All T-Shirts';
+
   if(filtered.length === 0){
     grid.innerHTML = `<div style="grid-column:1/-1;" class="empty-state">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><path d="M21 21l-4.35-4.35"/></svg>
@@ -122,24 +145,31 @@ function renderSaleAndNewSections(){
   const saleItems = allProducts.filter(p => p.saleEnabled).slice(0, 6);
   const newItems = [...allProducts].slice(0, 6);
 
+  const saleSection = $('saleSection');
+  const newSection = $('newSection');
+
   if(saleItems.length){
-    $('saleSection').style.display = 'block';
+    saleSection.dataset.hasItems = '1';
+    saleSection.style.display = 'block';
     $('saleGrid').innerHTML = saleItems.map(productCardHtml).join('');
   } else {
-    $('saleSection').style.display = 'none';
+    saleSection.dataset.hasItems = '0';
+    saleSection.style.display = 'none';
   }
   if(newItems.length){
-    $('newSection').style.display = 'block';
+    newSection.dataset.hasItems = '1';
+    newSection.style.display = 'block';
     $('newGrid').innerHTML = newItems.map(productCardHtml).join('');
   } else {
-    $('newSection').style.display = 'none';
+    newSection.dataset.hasItems = '0';
+    newSection.style.display = 'none';
   }
 }
 
 function productCardHtml(p){
   const price = effectivePrice(p);
   const hasDiscount = p.saleEnabled && p.originalPrice && p.originalPrice > price;
-  const oos = p.visibility === 'out_of_stock' || Number(p.stock) <= 0;
+  const oos = isOutOfStock(p);
   return `
   <div class="product-card" onclick="openProductDetail('${p.id}')">
     <div class="product-img-wrap">
@@ -185,8 +215,8 @@ function renderProductDetail(){
   const media = collectMedia(p);
   const price = effectivePrice(p);
   const hasDiscount = p.saleEnabled && p.originalPrice && p.originalPrice > price;
-  const stock = Number(p.stock) || 0;
-  const oos = p.visibility === 'out_of_stock' || stock <= 0;
+  const stock = getStock(p);
+  const oos = isOutOfStock(p);
 
   const mediaHtml = media.map(m => `
     <div class="pd-media-item">
@@ -219,7 +249,7 @@ function renderProductDetail(){
 
   let stockNote = '';
   if(oos) stockNote = `<div class="stock-note stock-out">Out of stock</div>`;
-  else if(stock <= 5) stockNote = `<div class="stock-note stock-low">Only ${stock} left in stock</div>`;
+  else if(stock <= 5 && stock < 999) stockNote = `<div class="stock-note stock-low">Only ${stock} left in stock</div>`;
   else stockNote = `<div class="stock-note stock-in">In stock</div>`;
 
   $('pdContent').innerHTML = `
@@ -259,9 +289,14 @@ function renderProductDetail(){
       </div>` : ''}
     </div>
     <div class="pd-sticky-bar">
-      <button class="btn btn-primary" id="addToCartBtn" ${oos ? 'disabled' : ''} onclick="addCurrentToCart()">
-        ${oos ? 'Out of Stock' : 'Add to Cart — ' + fmtMoney(price)}
-      </button>
+      <div style="display:flex;gap:10px;">
+        <button class="btn btn-outline" style="flex:1;" id="addToCartBtn" ${oos ? 'disabled' : ''} onclick="addCurrentToCart()">
+          ${oos ? 'Out of Stock' : 'Add to Cart'}
+        </button>
+        <button class="btn btn-primary" style="flex:1;" id="buyNowBtn" ${oos ? 'disabled' : ''} onclick="buyNow()">
+          Buy Now
+        </button>
+      </div>
     </div>
   `;
 }
@@ -331,6 +366,15 @@ function addCurrentToCart(){
   showToast('Added to cart', 'success');
 }
 window.addCurrentToCart = addCurrentToCart;
+
+function buyNow(){
+  const p = currentProduct;
+  if(p.colors && p.colors.length && !selectedColor){ showToast('Please select a color', 'error'); return; }
+  if(p.sizes && p.sizes.length && !selectedSize){ showToast('Please select a size', 'error'); return; }
+  addCurrentToCart();
+  goTo('cart');
+}
+window.buyNow = buyNow;
 
 /* ---------------- CART ---------------- */
 function updateCartBadge(){

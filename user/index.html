@@ -116,7 +116,7 @@
   .pd-dots{position:absolute;bottom:14px;left:50%;transform:translateX(-50%);display:flex;gap:6px;}
   .pd-dot{width:6px;height:6px;border-radius:50%;background:rgba(255,255,255,.6);}
   .pd-dot.active{background:#fff;width:18px;border-radius:3px;}
-  .pd-body{padding:20px 16px 100px;}
+  .pd-body{padding:20px 16px 150px;}
   .pd-category{font-size:11.5px;color:var(--gray-500);font-weight:600;text-transform:uppercase;letter-spacing:.4px;margin-bottom:6px;}
   .pd-name{font-size:22px;font-weight:800;letter-spacing:-.5px;margin-bottom:10px;}
   .pd-price-row{display:flex;align-items:center;gap:10px;margin-bottom:6px;}
@@ -140,7 +140,7 @@
   .stock-in{color:var(--success);}
   .stock-low{color:#d97706;}
   .stock-out{color:var(--danger);}
-  .pd-sticky-bar{position:fixed;bottom:0;left:0;right:0;background:#fff;border-top:1px solid var(--gray-100);padding:12px 16px;padding-bottom:calc(12px + env(safe-area-inset-bottom));z-index:60;}
+  .pd-sticky-bar{position:fixed;bottom:64px;left:0;right:0;background:#fff;border-top:1px solid var(--gray-100);padding:12px 16px;padding-bottom:12px;z-index:70;box-shadow:0 -4px 12px rgba(0,0,0,0.05);}
 
   /* ===== CART ===== */
   .cart-item{display:flex;gap:12px;padding:14px 0;border-bottom:1px solid var(--gray-100);}
@@ -211,8 +211,9 @@
     .search-bar,.cat-nav,.banner-wrap,.section{max-width:1100px;margin:0 auto;padding-left:24px;padding-right:24px;}
     .product-grid{grid-template-columns:repeat(4,1fr);gap:20px;}
     .banner{aspect-ratio:16/5;}
-    .pd-body{max-width:1100px;margin:0 auto;padding-bottom:40px;}
+    .pd-body{max-width:1100px;margin:0 auto;padding-bottom:100px;}
     .pd-gallery{max-width:1100px;margin:0 auto;}
+    .pd-sticky-bar{bottom:0;}
     #page-cart .section,#page-orders .section{max-width:640px;margin:0 auto;}
   }
 </style>
@@ -418,13 +419,13 @@
   // PASTE YOUR FIREBASE CONFIG HERE (same project as admin.html)
   // =====================================================
   const firebaseConfig = {
-  apiKey: "AIzaSyCufV_4Cb80GR_lKOuo2tpvnqhx6sFkrUg",
-  authDomain: "testing-t-shirt.firebaseapp.com",
-  projectId: "testing-t-shirt",
-  storageBucket: "testing-t-shirt.firebasestorage.app",
-  messagingSenderId: "1001259932270",
-  appId: "1:1001259932270:web:60cac8c3b5e8d155f5e47f"
-};
+    apiKey: "YOUR_API_KEY",
+    authDomain: "YOUR_PROJECT.firebaseapp.com",
+    projectId: "YOUR_PROJECT_ID",
+    storageBucket: "YOUR_PROJECT.appspot.com",
+    messagingSenderId: "YOUR_SENDER_ID",
+    appId: "YOUR_APP_ID"
+  };
 
   const app = initializeApp(firebaseConfig);
   const auth = getAuth(app);
