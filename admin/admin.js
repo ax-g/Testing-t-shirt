@@ -364,7 +364,7 @@ async function saveProduct(){
     videoEnabled: !!$('pVideoUrl').value.trim(),
     colors: editingColors,
     sizes: editingSizes,
-    stock: parseInt($('pStock').value) || 0,
+    stock: $('pStock').value.trim() === '' ? 999 : (parseInt($('pStock').value) || 0),
     visibility: $('pVisibility').value,
     updatedAt: window._fb.serverTimestamp()
   };
