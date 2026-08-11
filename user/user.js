@@ -22,11 +22,13 @@ const CART_KEY = 'tts_cart_v1';
 /* ---------------- UTIL ---------------- */
 function $(id){ return document.getElementById(id); }
 function showLoader(v){ $('globalLoader').classList.toggle('active', v); }
+let toastTimer = null;
 function showToast(msg, type=''){
   const t = $('toast');
+  clearTimeout(toastTimer);
   t.textContent = msg;
   t.className = 'toast show' + (type ? ' ' + type : '');
-  setTimeout(()=> t.classList.remove('show'), 2600);
+  toastTimer = setTimeout(()=> t.classList.remove('show'), 2200);
 }
 function fmtMoney(n){ return CURRENCY + Number(n||0).toFixed(2); }
 function fmtDate(ts){
@@ -702,17 +704,26 @@ let myOrders = [];
 
 function initOrdersListener(){
   if(!currentUser) return;
-  const { onSnapshot, collection, query, where, orderBy, db } = window._fb;
+  const { onSnapshot, collection, query, where, db } = window._fb;
   try{
-    const q = query(collection(db, 'orders'), where('uid', '==', currentUser.uid), orderBy('createdAt', 'desc'));
+    // NOTE: sorting is done client-side (not via orderBy) to avoid requiring
+    // a Firestore composite index for uid + createdAt, which otherwise causes
+    // this query to silently fail with no visible error to the customer.
+    const q = query(collection(db, 'orders'), where('uid', '==', currentUser.uid));
     unsubOrders = onSnapshot(q, (snap) => {
       myOrders = [];
       snap.forEach(d => myOrders.push({ id: d.id, ...d.data() }));
+      myOrders.sort((a,b) => (b.createdAt?.seconds||0) - (a.createdAt?.seconds||0));
       renderOrdersPage();
     }, (err) => {
       console.error('Orders load error:', err);
+      showToast('Could not load your orders: ' + err.message, 'error');
+      renderOrdersPage();
     });
-  }catch(e){ console.error(e); }
+  }catch(e){
+    console.error(e);
+    showToast('Could not load your orders', 'error');
+  }
 }
 
 function renderOrdersPage(){
