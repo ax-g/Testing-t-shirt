@@ -26,9 +26,14 @@ let toastTimer = null;
 function showToast(msg, type=''){
   const t = $('toast');
   clearTimeout(toastTimer);
+  t.classList.remove('show');
+  // Force reflow so re-adding 'show' right after removing it always retriggers the transition
+  void t.offsetWidth;
   t.textContent = msg;
   t.className = 'toast show' + (type ? ' ' + type : '');
-  toastTimer = setTimeout(()=> t.classList.remove('show'), 2200);
+  toastTimer = setTimeout(()=> {
+    t.classList.remove('show');
+  }, 2000);
 }
 function fmtMoney(n){ return CURRENCY + Number(n||0).toFixed(2); }
 function fmtDate(ts){
