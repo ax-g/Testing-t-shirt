@@ -15,9 +15,25 @@ let authMode = 'login';
 let selectedPayment = 'COD';
 let pendingCheckoutAfterAuth = false;
 let unsubOrders = null;
+let currentSort = 'newest';
+let compareMode = false;
+let compareIds = [];
+let savedAddresses = [];
+let addressPickerForCheckout = false;
+let returnOrderId = null;
 
 const CURRENCY = "₹";
 const CART_KEY = 'tts_cart_v1';
+const SORT_OPTIONS = [
+  { id:'newest', label:'Newest First' },
+  { id:'price_low', label:'Price: Low to High' },
+  { id:'price_high', label:'Price: High to Low' },
+  { id:'sale', label:'On Sale First' },
+  { id:'name_az', label:'Name: A to Z' }
+];
+const CANCELLABLE_STATUSES = ['Pending','Confirmed'];
+const RETURN_WINDOW_DAYS = 7;
+const CANCEL_WINDOW_HOURS = 24;
 
 /* ---------------- UTIL ---------------- */
 function $(id){ return document.getElementById(id); }
@@ -117,6 +133,19 @@ function filterCategory(cat){
 }
 window.filterCategory = filterCategory;
 
+function applySorting(list){
+  const sorted = [...list];
+  switch(currentSort){
+    case 'price_low': sorted.sort((a,b) => effectivePrice(a) - effectivePrice(b)); break;
+    case 'price_high': sorted.sort((a,b) => effectivePrice(b) - effectivePrice(a)); break;
+    case 'sale': sorted.sort((a,b) => (b.saleEnabled?1:0) - (a.saleEnabled?1:0)); break;
+    case 'name_az': sorted.sort((a,b) => (a.name||'').localeCompare(b.name||'')); break;
+    case 'newest':
+    default: sorted.sort((a,b) => (b.createdAt?.seconds||0) - (a.createdAt?.seconds||0));
+  }
+  return sorted;
+}
+
 function renderHomeProducts(){
   const searchVal = ($('searchInput')?.value || '').trim().toLowerCase();
   const isSearching = searchVal.length > 0;
@@ -127,11 +156,12 @@ function renderHomeProducts(){
   $('saleSection').style.display = isSearching ? 'none' : ($('saleSection').dataset.hasItems === '1' ? 'block' : 'none');
   $('newSection').style.display = isSearching ? 'none' : ($('newSection').dataset.hasItems === '1' ? 'block' : 'none');
 
-  const filtered = allProducts.filter(p => {
+  let filtered = allProducts.filter(p => {
     const matchSearch = !isSearching || (p.name||'').trim().toLowerCase().includes(searchVal);
     const matchCat = !activeCategory || p.category === activeCategory;
     return matchSearch && matchCat;
   });
+  filtered = applySorting(filtered);
 
   const grid = $('allGrid');
   const heading = document.querySelector('#allGrid').parentElement.querySelector('.section-title');
@@ -147,6 +177,101 @@ function renderHomeProducts(){
   grid.innerHTML = filtered.map(productCardHtml).join('');
 }
 window.renderHomeProducts = renderHomeProducts;
+
+/* ---------------- SORT SHEET ---------------- */
+function openSortSheet(){
+  $('sortOptionsList').innerHTML = SORT_OPTIONS.map(o => `
+    <div class="sort-option ${currentSort===o.id?'selected':''}" onclick="applySortChoice('${o.id}')">
+      ${o.label}
+      ${currentSort===o.id ? '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><path d="M20 6L9 17l-5-5"/></svg>' : ''}
+    </div>
+  `).join('');
+  $('sortSheet').classList.add('active');
+}
+window.openSortSheet = openSortSheet;
+function closeSortSheet(){ $('sortSheet').classList.remove('active'); }
+window.closeSortSheet = closeSortSheet;
+function applySortChoice(id){
+  currentSort = id;
+  const opt = SORT_OPTIONS.find(o => o.id === id);
+  $('sortLabel').textContent = opt ? opt.label : 'Sort';
+  document.getElementById('sortLabel').parentElement.classList.toggle('active', id !== 'newest');
+  closeSortSheet();
+  renderHomeProducts();
+  renderSaleAndNewSections();
+}
+window.applySortChoice = applySortChoice;
+
+/* ---------------- COMPARE ---------------- */
+function toggleCompareMode(){
+  compareMode = !compareMode;
+  document.body.classList.toggle('compare-mode', compareMode);
+  $('compareToggleBtn').classList.toggle('active', compareMode);
+  if(!compareMode){
+    compareIds = [];
+    updateCompareTray();
+  }
+  renderHomeProducts();
+  renderSaleAndNewSections();
+}
+window.toggleCompareMode = toggleCompareMode;
+
+function toggleCompareSelect(id, evt){
+  if(evt) evt.stopPropagation();
+  const idx = compareIds.indexOf(id);
+  if(idx > -1){
+    compareIds.splice(idx,1);
+  } else {
+    if(compareIds.length >= 4){ showToast('You can compare up to 4 products', 'error'); return; }
+    compareIds.push(id);
+  }
+  renderHomeProducts();
+  renderSaleAndNewSections();
+  updateCompareTray();
+}
+window.toggleCompareSelect = toggleCompareSelect;
+
+function updateCompareTray(){
+  const tray = $('compareTray');
+  if(compareIds.length >= 2){
+    tray.classList.add('show');
+    $('compareCount').textContent = compareIds.length;
+  } else {
+    tray.classList.remove('show');
+  }
+}
+
+function openCompareSheet(){
+  const items = allProducts.filter(p => compareIds.includes(p.id));
+  if(items.length < 2){ showToast('Select at least 2 products to compare', 'error'); return; }
+
+  const rows = [
+    { label:'Image', get: p => `<img src="${escapeHtml(p.image1)}">` },
+    { label:'Name', get: p => escapeHtml(p.name) },
+    { label:'Price', get: p => fmtMoney(effectivePrice(p)) },
+    { label:'Category', get: p => escapeHtml(p.category||'—') },
+    { label:'Sizes', get: p => escapeHtml((p.sizes||[]).join(', ')||'—') },
+    { label:'Colors', get: p => escapeHtml((p.colors||[]).join(', ')||'—') },
+    { label:'Stock', get: p => isOutOfStock(p) ? 'Out of stock' : 'In stock' }
+  ];
+
+  $('compareContent').innerHTML = `
+    <table class="compare-table">
+      <tbody>
+        ${rows.map(r => `
+          <tr>
+            <th>${r.label}</th>
+            ${items.map(p => `<td>${r.get(p)}</td>`).join('')}
+          </tr>
+        `).join('')}
+      </tbody>
+    </table>
+  `;
+  $('compareSheet').classList.add('active');
+}
+window.openCompareSheet = openCompareSheet;
+function closeCompareSheet(){ $('compareSheet').classList.remove('active'); }
+window.closeCompareSheet = closeCompareSheet;
 
 function renderSaleAndNewSections(){
   const saleItems = allProducts.filter(p => p.saleEnabled).slice(0, 6);
@@ -544,8 +669,10 @@ function initAuthListener(){
       $('coName').value = user.displayName || '';
       $('coEmail').value = user.email || '';
       initOrdersListener();
+      initAddressesListener();
     } else {
       if(unsubOrders){ unsubOrders(); unsubOrders = null; }
+      savedAddresses = [];
       renderOrdersPage();
     }
   });
@@ -669,9 +796,16 @@ async function placeOrder(){
       paymentMethod: selectedPayment === 'COD' ? 'COD' : 'Online Payment',
       paymentStatus,
       orderStatus,
+      returnStatus: null,
+      returnReason: null,
       createdAt: serverTimestamp(),
       updatedAt: serverTimestamp()
     });
+
+    // Save address for next time if the customer checked the box
+    if($('coSaveAddress').checked){
+      await saveAddressToProfile({ name, phone, address, city, state, pincode });
+    }
 
     // NOTE: Admin email notification is triggered server-side via a Cloud
     // Function listening on orders/{orderId} onCreate (see functions/index.js).
@@ -704,8 +838,115 @@ async function runOnlinePaymentFlow(amount, orderId){
   });
 }
 
+/* ---------------- SAVED ADDRESSES ---------------- */
+function initAddressesListener(){
+  if(!currentUser) return;
+  const { onSnapshot, collection, db } = window._fb;
+  try{
+    onSnapshot(collection(db, 'users', currentUser.uid, 'addresses'), (snap) => {
+      savedAddresses = [];
+      snap.forEach(d => savedAddresses.push({ id: d.id, ...d.data() }));
+    }, (err) => console.error('Addresses load error:', err));
+  }catch(e){ console.error(e); }
+}
+
+async function saveAddressToProfile(addr){
+  if(!currentUser) return;
+  try{
+    const { db, collection, addDoc, serverTimestamp } = window._fb;
+    await addDoc(collection(db, 'users', currentUser.uid, 'addresses'), {
+      ...addr,
+      createdAt: serverTimestamp()
+    });
+  }catch(e){ console.error('Failed to save address:', e); }
+}
+
+function openAddressSheet(forCheckout){
+  addressPickerForCheckout = !!forCheckout;
+  renderAddressList();
+  $('addressSheet').classList.add('active');
+}
+window.openAddressSheet = openAddressSheet;
+
+function closeAddressSheet(){
+  $('addressSheet').classList.remove('active');
+}
+window.closeAddressSheet = closeAddressSheet;
+
+function renderAddressList(){
+  const wrap = $('savedAddressesList');
+  if(!currentUser){
+    wrap.innerHTML = `<div class="empty-state" style="padding:30px 10px;">Sign in to save and reuse addresses</div>`;
+    return;
+  }
+  if(savedAddresses.length === 0){
+    wrap.innerHTML = `<div class="empty-state" style="padding:30px 10px;">No saved addresses yet</div>`;
+    return;
+  }
+  wrap.innerHTML = savedAddresses.map(a => `
+    <div class="addr-card" onclick="useAddress('${a.id}')">
+      <div class="addr-card-top">
+        <div class="addr-label">${escapeHtml(a.name)}</div>
+      </div>
+      <div class="addr-text">${escapeHtml(a.address)}, ${escapeHtml(a.city)}, ${escapeHtml(a.state)} - ${escapeHtml(a.pincode)}<br>${escapeHtml(a.phone)}</div>
+      <div class="addr-delete" onclick="event.stopPropagation();deleteAddress('${a.id}')">Delete</div>
+    </div>
+  `).join('');
+}
+
+function useAddress(addrId){
+  const a = savedAddresses.find(x => x.id === addrId);
+  if(!a) return;
+  if(addressPickerForCheckout){
+    $('coName').value = a.name || '';
+    $('coPhone').value = a.phone || '';
+    $('coAddress').value = a.address || '';
+    $('coCity').value = a.city || '';
+    $('coState').value = a.state || '';
+    $('coPincode').value = a.pincode || '';
+    showToast('Address applied', 'success');
+  }
+  closeAddressSheet();
+}
+window.useAddress = useAddress;
+
+async function deleteAddress(addrId){
+  if(!confirm('Delete this saved address?')) return;
+  try{
+    const { db, doc, deleteDoc } = window._fb;
+    await deleteDoc(doc(db, 'users', currentUser.uid, 'addresses', addrId));
+    showToast('Address deleted', 'success');
+  }catch(e){
+    showToast('Failed to delete address', 'error');
+  }
+}
+window.deleteAddress = deleteAddress;
+
+function showNewAddressForm(){
+  closeAddressSheet();
+  showToast('Fill in the checkout form and check "Save this address"', '');
+}
+window.showNewAddressForm = showNewAddressForm;
+
 /* ---------------- ORDERS ---------------- */
 let myOrders = [];
+
+function canCancelOrder(o){
+  if(!CANCELLABLE_STATUSES.includes(o.orderStatus)) return false;
+  const created = o.createdAt?.toDate ? o.createdAt.toDate() : (o.createdAt ? new Date(o.createdAt) : null);
+  if(!created) return true; // no timestamp yet (just placed) — allow
+  const hoursSince = (Date.now() - created.getTime()) / 3600000;
+  return hoursSince <= CANCEL_WINDOW_HOURS;
+}
+
+function canReturnOrder(o){
+  if(o.orderStatus !== 'Delivered') return false;
+  if(o.returnStatus) return false; // already requested
+  const deliveredAt = o.deliveredAt?.toDate ? o.deliveredAt.toDate() : (o.updatedAt?.toDate ? o.updatedAt.toDate() : null);
+  if(!deliveredAt) return true;
+  const daysSince = (Date.now() - deliveredAt.getTime()) / 86400000;
+  return daysSince <= RETURN_WINDOW_DAYS;
+}
 
 function initOrdersListener(){
   if(!currentUser) return;
@@ -765,6 +1006,7 @@ function renderOrdersPage(){
         <span style="font-size:12px;color:var(--gray-500);">${escapeHtml(o.paymentMethod)} · ${escapeHtml(o.paymentStatus)}</span>
         <span style="font-weight:800;">${fmtMoney(o.finalTotal)}</span>
       </div>
+      ${o.returnStatus ? `<div style="margin-top:8px;"><span class="badge badge-${o.returnStatus==='Approved'?'delivered':(o.returnStatus==='Rejected'?'cancelled':'pending')}">Return: ${escapeHtml(o.returnStatus)}</span></div>` : ''}
     </div>
   `).join('');
 }
@@ -772,6 +1014,25 @@ function renderOrdersPage(){
 function openOrderDetail(orderId){
   const o = myOrders.find(x => x.id === orderId);
   if(!o) return;
+  returnOrderId = orderId;
+
+  const canCancel = canCancelOrder(o);
+  const canReturn = canReturnOrder(o);
+
+  let actionsHtml = '';
+  if(canCancel){
+    actionsHtml += `<button class="btn btn-outline" style="color:var(--danger);border-color:var(--danger);" onclick="cancelOrder('${o.id}')">Cancel Order</button>`;
+  } else if(CANCELLABLE_STATUSES.includes(o.orderStatus)){
+    actionsHtml += `<div class="hint" style="margin-top:10px;">Cancellation window (24 hours after ordering) has passed. Please contact support.</div>`;
+  }
+  if(canReturn){
+    actionsHtml += `<button class="btn btn-primary" onclick="openReturnSheet('${o.id}')">Request Return / Refund</button>`;
+  } else if(o.returnStatus){
+    actionsHtml += `<div class="hint" style="margin-top:10px;">Return status: <strong>${escapeHtml(o.returnStatus)}</strong>${o.returnReason ? ' — "'+escapeHtml(o.returnReason)+'"' : ''}</div>`;
+  } else if(o.orderStatus === 'Delivered'){
+    actionsHtml += `<div class="hint" style="margin-top:10px;">Return window (7 days after delivery) has passed.</div>`;
+  }
+
   $('orderDetailContent').innerHTML = `
     <div class="order-card-top" style="margin-bottom:14px;">
       <div>
@@ -798,10 +1059,68 @@ function openOrderDetail(orderId){
     <div class="pd-desc">${escapeHtml(o.customerName)}<br>${escapeHtml(o.address)}, ${escapeHtml(o.city)}, ${escapeHtml(o.state)} - ${escapeHtml(o.pincode)}<br>${escapeHtml(o.customerPhone)}</div>
     <div class="pd-section-title" style="margin-top:16px;">Payment</div>
     <div class="pd-desc">${escapeHtml(o.paymentMethod)} · <span class="badge badge-${(o.paymentStatus||'unpaid').toLowerCase().replace(/\s/g,'')}">${escapeHtml(o.paymentStatus)}</span></div>
+    <div class="order-actions" style="flex-direction:column;">${actionsHtml}</div>
   `;
   $('orderDetailSheet').classList.add('active');
 }
 window.openOrderDetail = openOrderDetail;
+
+async function cancelOrder(orderId){
+  if(!confirm('Cancel this order? This cannot be undone.')) return;
+  try{
+    const { db, doc, updateDoc, serverTimestamp } = window._fb;
+    await updateDoc(doc(db, 'orders', orderId), {
+      orderStatus: 'Cancelled',
+      updatedAt: serverTimestamp()
+    });
+    showToast('Order cancelled', 'success');
+    closeOrderDetailSheet();
+  }catch(err){
+    showToast('Failed to cancel: ' + err.message, 'error');
+  }
+}
+window.cancelOrder = cancelOrder;
+
+function openReturnSheet(orderId){
+  returnOrderId = orderId;
+  $('returnComplaint').value = '';
+  closeOrderDetailSheet();
+  $('returnSheet').classList.add('active');
+}
+window.openReturnSheet = openReturnSheet;
+
+function closeReturnSheet(){
+  $('returnSheet').classList.remove('active');
+}
+window.closeReturnSheet = closeReturnSheet;
+
+async function submitReturnRequest(){
+  const reason = $('returnComplaint').value.trim();
+  if(!reason){ showToast('Please describe the issue', 'error'); return; }
+  if(!returnOrderId) return;
+
+  const btn = $('submitReturnBtn');
+  btn.disabled = true;
+  btn.innerHTML = '<span class="spinner"></span>';
+
+  try{
+    const { db, doc, updateDoc, serverTimestamp } = window._fb;
+    await updateDoc(doc(db, 'orders', returnOrderId), {
+      returnStatus: 'Requested',
+      returnReason: reason,
+      returnRequestedAt: serverTimestamp(),
+      updatedAt: serverTimestamp()
+    });
+    showToast('Return request submitted', 'success');
+    closeReturnSheet();
+  }catch(err){
+    showToast('Failed to submit request: ' + err.message, 'error');
+  }finally{
+    btn.disabled = false;
+    btn.textContent = 'Submit Return Request';
+  }
+}
+window.submitReturnRequest = submitReturnRequest;
 
 function closeOrderDetailSheet(){
   $('orderDetailSheet').classList.remove('active');
