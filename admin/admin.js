@@ -458,7 +458,9 @@ function renderOrdersTable(){
       <td>${fmtDate(o.createdAt)}</td>
       <td style="font-weight:600;">${fmtMoney(o.finalTotal)}</td>
       <td>${escapeHtml(o.paymentMethod||'—')}<br><span class="badge badge-${(o.paymentStatus||'unpaid').toLowerCase()}" style="margin-top:4px;">${escapeHtml(o.paymentStatus||'Unpaid')}</span></td>
-      <td><span class="badge badge-${(o.orderStatus||'pending').toLowerCase()}">${escapeHtml(o.orderStatus||'Pending')}</span></td>
+      <td><span class="badge badge-${(o.orderStatus||'pending').toLowerCase()}">${escapeHtml(o.orderStatus||'Pending')}</span>
+        ${o.returnStatus ? `<br><span class="badge badge-${o.returnStatus==='Approved'?'delivered':(o.returnStatus==='Rejected'?'cancelled':'pending')}" style="margin-top:4px;">Return: ${escapeHtml(o.returnStatus)}</span>` : ''}
+      </td>
       <td><button class="btn btn-outline btn-sm" onclick="openOrderModal('${o.id}')">View</button></td>
     </tr>
   `).join('');
@@ -513,6 +515,24 @@ function openOrderModal(orderId){
       </select>
       <button class="btn btn-primary btn-sm" style="margin-top:12px;" onclick="updateOrderStatus('${o.id}')">Update Status</button>
     </div>
+    ${o.returnStatus ? `
+    <div class="form-section">
+      <div class="form-section-title">Return / Refund Request</div>
+      <div style="background:var(--gray-50);border-radius:10px;padding:14px;margin-bottom:12px;">
+        <div style="font-size:12px;color:var(--gray-500);margin-bottom:6px;">Customer's reason:</div>
+        <div style="font-size:13.5px;">${escapeHtml(o.returnReason||'—')}</div>
+      </div>
+      <div style="display:flex;align-items:center;gap:10px;margin-bottom:12px;">
+        <span style="font-size:13px;font-weight:600;">Current status:</span>
+        <span class="badge badge-${o.returnStatus==='Approved'?'delivered':(o.returnStatus==='Rejected'?'cancelled':'pending')}">${escapeHtml(o.returnStatus)}</span>
+      </div>
+      ${o.returnStatus === 'Requested' ? `
+        <div style="display:flex;gap:10px;">
+          <button class="btn btn-primary btn-sm" style="flex:1;background:var(--success);" onclick="resolveReturn('${o.id}','Approved')">Approve Return</button>
+          <button class="btn btn-danger btn-sm" style="flex:1;" onclick="resolveReturn('${o.id}','Rejected')">Reject Return</button>
+        </div>
+      ` : ''}
+    </div>` : ''}
   `;
   $('orderModalOverlay').classList.add('active');
 }
@@ -535,6 +555,23 @@ async function updateOrderStatus(orderId){
   }
 }
 window.updateOrderStatus = updateOrderStatus;
+
+async function resolveReturn(orderId, decision){
+  if(!confirm(`Mark this return as ${decision}?`)) return;
+  try{
+    const { db, doc, updateDoc, serverTimestamp } = window._fb;
+    await updateDoc(doc(db, 'orders', orderId), {
+      returnStatus: decision,
+      returnResolvedAt: serverTimestamp(),
+      updatedAt: serverTimestamp()
+    });
+    showToast(`Return ${decision.toLowerCase()}`, 'success');
+    closeOrderModal();
+  }catch(err){
+    showToast('Failed to update return: ' + err.message, 'error');
+  }
+}
+window.resolveReturn = resolveReturn;
 
 /* ---------------- SETTINGS ---------------- */
 async function loadSettings(){
