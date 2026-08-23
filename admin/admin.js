@@ -44,8 +44,8 @@ function uploadToImageKit(inputEl, targetFieldId){
   }, function(err, result){
     if(err){
       console.error('ImageKit upload error:', err);
-      if(statusEl) statusEl.textContent = '';
-      showToast('Upload failed: ' + (err.message || 'Check ImageKit settings'), 'error');
+      if(statusEl) statusEl.textContent = 'Upload failed — paste a URL above instead';
+      showToast('Upload failed — you can paste an image URL directly instead', 'error');
       return;
     }
     $(targetFieldId).value = result.url;
@@ -58,6 +58,18 @@ function uploadToImageKit(inputEl, targetFieldId){
   });
 }
 window.uploadToImageKit = uploadToImageKit;
+
+function onMediaUrlInput(fieldId){
+  const url = $(fieldId).value.trim();
+  const previewEl = $(fieldId + 'Preview');
+  const statusEl = $(fieldId + 'Status');
+  if(previewEl){
+    if(url){ previewEl.src = url; previewEl.style.display = 'block'; }
+    else { previewEl.style.display = 'none'; previewEl.src = ''; }
+  }
+  if(statusEl) statusEl.textContent = '';
+}
+window.onMediaUrlInput = onMediaUrlInput;
 
 
 /* ---------------- UTIL ---------------- */
