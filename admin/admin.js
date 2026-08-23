@@ -13,6 +13,53 @@ let unsubOrders = null;
 
 const CURRENCY = "₹";
 
+/* ---------------- IMAGEKIT UPLOAD ---------------- */
+// Unsigned client-side upload — no private key or backend needed.
+// Get your endpoint/key at imagekit.io → Developer Options.
+const IMAGEKIT_URL_ENDPOINT = "https://ik.imagekit.io/htwnlpcvs2";
+const IMAGEKIT_PUBLIC_KEY = "public_d/L0mngVSx1ZnDyF31tSgC3jmxA=";
+
+let imagekit = null;
+try{
+  imagekit = new ImageKit({
+    publicKey: IMAGEKIT_PUBLIC_KEY,
+    urlEndpoint: IMAGEKIT_URL_ENDPOINT
+  });
+}catch(e){ console.error('ImageKit init failed:', e); }
+
+function uploadToImageKit(inputEl, targetFieldId){
+  const file = inputEl.files[0];
+  if(!file) return;
+  if(!imagekit){ showToast('Image upload not configured', 'error'); return; }
+
+  const statusEl = $(targetFieldId + 'Status');
+  const previewEl = $(targetFieldId + 'Preview');
+  if(statusEl) statusEl.textContent = 'Uploading...';
+
+  imagekit.upload({
+    file: file,
+    fileName: Date.now() + '_' + file.name.replace(/[^a-zA-Z0-9._-]/g, ''),
+    folder: '/testing-tshirt-products/',
+    useUniqueFileName: true
+  }, function(err, result){
+    if(err){
+      console.error('ImageKit upload error:', err);
+      if(statusEl) statusEl.textContent = '';
+      showToast('Upload failed: ' + (err.message || 'Check ImageKit settings'), 'error');
+      return;
+    }
+    $(targetFieldId).value = result.url;
+    if(statusEl) statusEl.textContent = 'Uploaded ✓';
+    if(previewEl && file.type.startsWith('image/')){
+      previewEl.src = result.url;
+      previewEl.style.display = 'block';
+    }
+    showToast('Uploaded successfully', 'success');
+  });
+}
+window.uploadToImageKit = uploadToImageKit;
+
+
 /* ---------------- UTIL ---------------- */
 function $(id){ return document.getElementById(id); }
 function showLoader(v){ $('globalLoader').classList.toggle('active', v); }
@@ -271,12 +318,14 @@ function openProductModal(productId){
     $('pVisibility').value = p.visibility || 'active';
     editingColors = [...(p.colors || [])];
     editingSizes = [...(p.sizes || [])];
+    showExistingMediaPreviews(p);
   } else {
     ['pName','pDescription','pCategory','pPrice','pOriginalPrice','pSalePrice',
      'pDiscountPercent','pOfferText','pImage1','pImage2','pImage3','pImage4',
      'pVideoUrl','pStock'].forEach(id => $(id).value = '');
     $('pSaleEnabled').checked = false;
     $('pVisibility').value = 'active';
+    clearMediaPreviews();
   }
   toggleSaleFields();
   renderChips('color');
@@ -284,6 +333,42 @@ function openProductModal(productId){
   $('productModalOverlay').classList.add('active');
 }
 window.openProductModal = openProductModal;
+
+function showExistingMediaPreviews(p){
+  [['pImage1',p.image1],['pImage2',p.image2],['pImage3',p.image3],['pImage4',p.image4]].forEach(([id,url]) => {
+    const preview = $(id + 'Preview');
+    const status = $(id + 'Status');
+    if(url){
+      if(preview){ preview.src = url; preview.style.display = 'block'; }
+      if(status) status.textContent = 'Current image saved';
+    } else {
+      if(preview){ preview.style.display = 'none'; preview.src=''; }
+      if(status) status.textContent = '';
+    }
+  });
+  const videoStatus = $('pVideoUrlStatus');
+  if(videoStatus) videoStatus.textContent = p.videoUrl ? 'Current video saved' : '';
+  // Clear the file input elements themselves (can't be pre-filled, browsers block this)
+  ['pImage1File','pImage2File','pImage3File','pImage4File','pVideoUrlFile'].forEach(id => {
+    const el = $(id);
+    if(el) el.value = '';
+  });
+}
+
+function clearMediaPreviews(){
+  ['pImage1','pImage2','pImage3','pImage4'].forEach(id => {
+    const preview = $(id + 'Preview');
+    const status = $(id + 'Status');
+    if(preview){ preview.style.display = 'none'; preview.src=''; }
+    if(status) status.textContent = '';
+  });
+  const videoStatus = $('pVideoUrlStatus');
+  if(videoStatus) videoStatus.textContent = '';
+  ['pImage1File','pImage2File','pImage3File','pImage4File','pVideoUrlFile'].forEach(id => {
+    const el = $(id);
+    if(el) el.value = '';
+  });
+}
 
 function closeProductModal(){
   $('productModalOverlay').classList.remove('active');

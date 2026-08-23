@@ -487,26 +487,40 @@
         <div class="form-section-title">Media (Image 1 required, others optional)</div>
         <div class="form-grid">
           <div class="field full">
-            <label>Image 1 URL *</label>
-            <input type="url" id="pImage1" placeholder="https://...">
+            <label>Image 1 *</label>
+            <input type="file" id="pImage1File" accept="image/*" onchange="uploadToImageKit(this,'pImage1')">
+            <input type="hidden" id="pImage1">
+            <div id="pImage1Status" class="hint"></div>
+            <img id="pImage1Preview" style="max-width:110px;border-radius:8px;margin-top:8px;display:none;">
           </div>
           <div class="field">
-            <label>Image 2 URL</label>
-            <input type="url" id="pImage2" placeholder="https://...">
+            <label>Image 2</label>
+            <input type="file" id="pImage2File" accept="image/*" onchange="uploadToImageKit(this,'pImage2')">
+            <input type="hidden" id="pImage2">
+            <div id="pImage2Status" class="hint"></div>
+            <img id="pImage2Preview" style="max-width:90px;border-radius:8px;margin-top:8px;display:none;">
           </div>
           <div class="field">
-            <label>Image 3 URL</label>
-            <input type="url" id="pImage3" placeholder="https://...">
+            <label>Image 3</label>
+            <input type="file" id="pImage3File" accept="image/*" onchange="uploadToImageKit(this,'pImage3')">
+            <input type="hidden" id="pImage3">
+            <div id="pImage3Status" class="hint"></div>
+            <img id="pImage3Preview" style="max-width:90px;border-radius:8px;margin-top:8px;display:none;">
           </div>
           <div class="field">
-            <label>Image 4 URL</label>
-            <input type="url" id="pImage4" placeholder="https://...">
+            <label>Image 4</label>
+            <input type="file" id="pImage4File" accept="image/*" onchange="uploadToImageKit(this,'pImage4')">
+            <input type="hidden" id="pImage4">
+            <div id="pImage4Status" class="hint"></div>
+            <img id="pImage4Preview" style="max-width:90px;border-radius:8px;margin-top:8px;display:none;">
           </div>
           <div class="field">
-            <label>Video URL</label>
-            <input type="url" id="pVideoUrl" placeholder="https://...mp4">
+            <label>Video</label>
+            <input type="file" id="pVideoUrlFile" accept="video/*" onchange="uploadToImageKit(this,'pVideoUrl')">
+            <input type="hidden" id="pVideoUrl">
+            <div id="pVideoUrlStatus" class="hint"></div>
           </div>
-          <div class="hint full" style="grid-column:1/-1;">Leave optional fields blank if not available — the customer page automatically hides missing media.</div>
+          <div class="hint full" style="grid-column:1/-1;">Leave optional fields blank if not available — the customer page automatically hides missing media. Images upload directly to ImageKit.</div>
         </div>
       </div>
 
@@ -591,7 +605,7 @@
   // =====================================================
   // PASTE YOUR FIREBASE CONFIG HERE (from Firebase Console)
   // =====================================================
-const firebaseConfig = {
+  const firebaseConfig = {
   apiKey: "AIzaSyCufV_4Cb80GR_lKOuo2tpvnqhx6sFkrUg",
   authDomain: "testing-t-shirt.firebaseapp.com",
   projectId: "testing-t-shirt",
@@ -611,6 +625,7 @@ const firebaseConfig = {
     query, orderBy, onSnapshot, serverTimestamp, setDoc, limit
   };
 </script>
+<script src="https://unpkg.com/imagekit-javascript/dist/imagekit.min.js"></script>
 <script src="admin.js"></script>
 </body>
 </html>
