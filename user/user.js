@@ -649,6 +649,47 @@ async function handleAuthSubmit(){
 }
 window.handleAuthSubmit = handleAuthSubmit;
 
+async function handleGoogleSignIn(){
+  const errBox = $('authError');
+  errBox.style.display = 'none';
+  try{
+    const { auth, googleProvider, signInWithPopup } = window._fb;
+    await signInWithPopup(auth, googleProvider);
+    closeAuthSheet();
+    if(pendingCheckoutAfterAuth){
+      pendingCheckoutAfterAuth = false;
+      openCheckoutSheet();
+    }
+  }catch(err){
+    console.error(err);
+    if(err.code !== 'auth/popup-closed-by-user' && err.code !== 'auth/cancelled-popup-request'){
+      errBox.textContent = 'Google sign-in failed. Please try again.';
+      errBox.style.display = 'block';
+    }
+  }
+}
+window.handleGoogleSignIn = handleGoogleSignIn;
+
+async function handleGoogleSignIn(){
+  const errBox = $('authError');
+  errBox.style.display = 'none';
+  try{
+    const { auth, googleProvider, signInWithPopup } = window._fb;
+    await signInWithPopup(auth, googleProvider);
+    closeAuthSheet();
+    if(pendingCheckoutAfterAuth){
+      pendingCheckoutAfterAuth = false;
+      openCheckoutSheet();
+    }
+  }catch(err){
+    console.error(err);
+    if(err.code === 'auth/popup-closed-by-user') return; // user cancelled, no error needed
+    errBox.textContent = 'Google sign-in failed. Please try again.';
+    errBox.style.display = 'block';
+  }
+}
+window.handleGoogleSignIn = handleGoogleSignIn;
+
 function mapAuthError(code){
   const map = {
     'auth/invalid-credential':'Incorrect email or password.',
