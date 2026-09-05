@@ -661,30 +661,22 @@ async function handleGoogleSignIn(){
       openCheckoutSheet();
     }
   }catch(err){
-    console.error(err);
-    if(err.code !== 'auth/popup-closed-by-user' && err.code !== 'auth/cancelled-popup-request'){
-      errBox.textContent = 'Google sign-in failed. Please try again.';
-      errBox.style.display = 'block';
+    console.error('Google sign-in error:', err);
+    if(err.code === 'auth/popup-closed-by-user' || err.code === 'auth/cancelled-popup-request'){
+      return; // user cancelled, no error needed
     }
-  }
-}
-window.handleGoogleSignIn = handleGoogleSignIn;
-
-async function handleGoogleSignIn(){
-  const errBox = $('authError');
-  errBox.style.display = 'none';
-  try{
-    const { auth, googleProvider, signInWithPopup } = window._fb;
-    await signInWithPopup(auth, googleProvider);
-    closeAuthSheet();
-    if(pendingCheckoutAfterAuth){
-      pendingCheckoutAfterAuth = false;
-      openCheckoutSheet();
+    // Show the actual reason so it's fixable instead of a generic message
+    let msg = 'Google sign-in failed.';
+    if(err.code === 'auth/unauthorized-domain'){
+      msg = 'This website domain is not authorized for Google sign-in yet. Add it in Firebase Console → Authentication → Settings → Authorized domains.';
+    } else if(err.code === 'auth/operation-not-allowed'){
+      msg = 'Google sign-in is not enabled yet. Enable it in Firebase Console → Authentication → Sign-in method.';
+    } else if(err.code === 'auth/popup-blocked'){
+      msg = 'Your browser blocked the sign-in popup. Please allow popups for this site and try again.';
+    } else if(err.message){
+      msg = 'Google sign-in failed: ' + err.message;
     }
-  }catch(err){
-    console.error(err);
-    if(err.code === 'auth/popup-closed-by-user') return; // user cancelled, no error needed
-    errBox.textContent = 'Google sign-in failed. Please try again.';
+    errBox.textContent = msg;
     errBox.style.display = 'block';
   }
 }
