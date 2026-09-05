@@ -53,12 +53,14 @@ function showToast(msg, type=''){
 }
 
 function showOrderSuccessPopup(){
-  $('orderSuccessOverlay').classList.add('active');
+  const el = $('orderSuccessOverlay');
+  if(el) el.classList.add('active');
 }
 window.showOrderSuccessPopup = showOrderSuccessPopup;
 
 function closeOrderSuccessPopup(){
-  $('orderSuccessOverlay').classList.remove('active');
+  const el = $('orderSuccessOverlay');
+  if(el) el.classList.remove('active');
 }
 window.closeOrderSuccessPopup = closeOrderSuccessPopup;
 

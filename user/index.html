@@ -80,6 +80,12 @@
   /* ===== BANNER ===== */
   .banner-wrap{padding:0 16px 20px;}
   .banner{border-radius:var(--radius);overflow:hidden;position:relative;background:var(--gray-100);aspect-ratio:16/8;}
+  .banner-track{display:flex;width:100%;height:100%;transition:transform .5s ease;}
+  .banner-slide{flex:0 0 100%;width:100%;height:100%;}
+  .banner-slide img,.banner-slide video{width:100%;height:100%;object-fit:cover;display:block;}
+  .banner-dots{position:absolute;bottom:10px;left:50%;transform:translateX(-50%);display:flex;gap:6px;z-index:2;}
+  .banner-dot{width:6px;height:6px;border-radius:50%;background:rgba(255,255,255,.6);transition:width .2s;}
+  .banner-dot.active{background:#fff;width:16px;border-radius:3px;}
   .banner img{width:100%;height:100%;object-fit:cover;}
 
   /* ===== SECTIONS ===== */
@@ -125,6 +131,9 @@
   .pd-media-track{display:flex;overflow-x:auto;scroll-snap-type:x mandatory;scrollbar-width:none;}
   .pd-media-track::-webkit-scrollbar{display:none;}
   .pd-media-item{flex:0 0 100%;scroll-snap-align:start;aspect-ratio:4/5;background:var(--gray-100);}
+  .video-wrap{position:relative;width:100%;height:100%;}
+  .video-wrap video{width:100%;height:100%;object-fit:cover;}
+  .mute-btn{position:absolute;bottom:14px;right:14px;width:36px;height:36px;border-radius:50%;background:rgba(0,0,0,.55);display:flex;align-items:center;justify-content:center;color:#fff;backdrop-filter:blur(4px);}
   .pd-media-item img,.pd-media-item video{width:100%;height:100%;object-fit:cover;}
   .pd-dots{position:absolute;bottom:14px;left:50%;transform:translateX(-50%);display:flex;gap:6px;}
   .pd-dot{width:6px;height:6px;border-radius:50%;background:rgba(255,255,255,.6);}
@@ -233,6 +242,12 @@
   .auth-error{background:#fef2f2;color:var(--danger);padding:10px 14px;border-radius:10px;font-size:12.5px;margin-bottom:14px;display:none;}
 
   .toast{position:fixed;bottom:80px;left:50%;transform:translateX(-50%) translateY(20px);opacity:0;background:var(--black);color:#fff;padding:13px 22px;border-radius:12px;font-size:13px;font-weight:600;z-index:500;transition:transform .25s ease,opacity .25s ease;box-shadow:0 8px 24px rgba(0,0,0,.2);pointer-events:none;max-width:90%;text-align:center;}
+  .success-overlay{display:none;position:fixed;inset:0;background:rgba(0,0,0,.55);z-index:600;align-items:center;justify-content:center;padding:24px;}
+  .success-overlay.active{display:flex;}
+  .success-card{background:#fff;border-radius:22px;padding:28px 24px;text-align:center;max-width:340px;width:100%;box-shadow:0 20px 60px rgba(0,0,0,.3);}
+  .success-gif{width:100%;max-width:220px;margin:0 auto 18px;border-radius:14px;display:block;}
+  .success-title{font-size:20px;font-weight:800;margin-bottom:6px;}
+  .success-sub{font-size:13px;color:var(--gray-500);margin-bottom:20px;}
   .toast.show{transform:translateX(-50%) translateY(0);opacity:1;}
   .toast.error{background:var(--danger);}
   .toast.success{background:var(--success);}
@@ -299,8 +314,11 @@
   </header>
 
   <div class="banner-wrap">
-    <div class="banner">
-      <img src="banner.png" alt="Sale" onerror="this.parentElement.style.display='none'">
+    <div class="banner" id="bannerCarousel">
+      <div class="banner-track" id="bannerTrack">
+        <div class="banner-slide"><img src="banner.png" alt="Sale" onerror="this.closest('.banner-slide').style.display='none'"></div>
+      </div>
+      <div class="banner-dots" id="bannerDots" style="display:none;"></div>
     </div>
   </div>
 
@@ -528,6 +546,16 @@
 <div class="compare-tray" id="compareTray">
   <div class="compare-tray-text"><span id="compareCount">0</span> selected</div>
   <button onclick="openCompareSheet()">Compare</button>
+</div>
+
+<!-- ============ ORDER SUCCESS POPUP ============ -->
+<div class="success-overlay" id="orderSuccessOverlay" onclick="closeOrderSuccessPopup()">
+  <div class="success-card" onclick="event.stopPropagation()">
+    <img src="order-success.gif" alt="Order placed" class="success-gif" onerror="this.style.display='none'">
+    <div class="success-title">Order Placed!</div>
+    <div class="success-sub">We'll notify you as your order progresses.</div>
+    <button class="btn btn-primary" onclick="closeOrderSuccessPopup()">Continue Shopping</button>
+  </div>
 </div>
 
 <div class="toast" id="toast"></div>
