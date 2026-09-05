@@ -174,6 +174,7 @@ function initAuthListener(){
           initDashboard();
           initProductsListener();
           initOrdersListener();
+          initBannersListener();
           loadSettings();
         } else {
           // Not an authorized admin — sign out immediately
@@ -669,6 +670,131 @@ async function resolveReturn(orderId, decision){
   }
 }
 window.resolveReturn = resolveReturn;
+
+/* ---------------- BANNERS ---------------- */
+let allBanners = [];
+let unsubBanners = null;
+
+function initBannersListener(){
+  const { onSnapshot, collection, query, orderBy, db } = window._fb;
+  try{
+    const q = query(collection(db, 'banners'), orderBy('order', 'asc'));
+    unsubBanners = onSnapshot(q, (snap) => {
+      allBanners = [];
+      snap.forEach(d => allBanners.push({ id: d.id, ...d.data() }));
+      renderBannersTable();
+    }, (err) => {
+      console.error('Banners listener error:', err);
+      showToast('Failed to load banners: ' + err.message, 'error');
+    });
+  }catch(e){ console.error(e); }
+}
+
+function renderBannersTable(){
+  const body = $('bannersTableBody');
+  if(allBanners.length === 0){
+    body.innerHTML = `<tr><td colspan="5" style="text-align:center;color:var(--gray-500);padding:40px;">No extra slides yet — default banner.png is shown alone. Click "+ Add Banner Slide" to start a carousel.</td></tr>`;
+    return;
+  }
+  body.innerHTML = allBanners.map(b => `
+    <tr>
+      <td>
+        ${b.type === 'video'
+          ? `<video src="${escapeHtml(b.url)}" style="width:70px;height:40px;object-fit:cover;border-radius:6px;" muted></video>`
+          : `<img src="${escapeHtml(b.url)}" style="width:70px;height:40px;object-fit:cover;border-radius:6px;" onerror="this.style.opacity=0.3">`}
+      </td>
+      <td style="text-transform:capitalize;">${escapeHtml(b.type)}</td>
+      <td>${b.order ?? 0}</td>
+      <td><span class="badge ${b.active ? 'badge-active' : 'badge-hidden'}">${b.active ? 'Active' : 'Hidden'}</span></td>
+      <td>
+        <div class="row-flex">
+          <button class="icon-btn" title="Edit" onclick="openBannerModal('${b.id}')">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M17 3a2.85 2.83 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5z"/></svg>
+          </button>
+          <button class="icon-btn" title="Delete" onclick="deleteBanner('${b.id}')">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 6h18M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2m3 0v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6h14z"/></svg>
+          </button>
+        </div>
+      </td>
+    </tr>
+  `).join('');
+}
+
+function openBannerModal(bannerId){
+  $('bannerId').value = bannerId || '';
+  $('bannerModalTitle').textContent = bannerId ? 'Edit Banner Slide' : 'Add Banner Slide';
+  if(bannerId){
+    const b = allBanners.find(x => x.id === bannerId);
+    if(!b){ showToast('Banner not found', 'error'); return; }
+    $('bannerType').value = b.type || 'image';
+    $('bannerUrl').value = b.url || '';
+    $('bannerLink').value = b.link || '';
+    $('bannerOrder').value = b.order ?? '';
+    $('bannerActive').checked = b.active !== false;
+  } else {
+    $('bannerType').value = 'image';
+    $('bannerUrl').value = '';
+    $('bannerLink').value = '';
+    $('bannerOrder').value = allBanners.length + 1;
+    $('bannerActive').checked = true;
+  }
+  $('bannerModalOverlay').classList.add('active');
+}
+window.openBannerModal = openBannerModal;
+
+function closeBannerModal(){
+  $('bannerModalOverlay').classList.remove('active');
+}
+window.closeBannerModal = closeBannerModal;
+
+async function saveBanner(){
+  const id = $('bannerId').value;
+  const url = $('bannerUrl').value.trim();
+  if(!url){ showToast('Media URL is required', 'error'); return; }
+
+  const data = {
+    type: $('bannerType').value,
+    url,
+    link: $('bannerLink').value.trim() || null,
+    order: parseInt($('bannerOrder').value) || 0,
+    active: $('bannerActive').checked,
+    updatedAt: window._fb.serverTimestamp()
+  };
+
+  const btn = $('saveBannerBtn');
+  btn.disabled = true;
+  btn.textContent = 'Saving...';
+  try{
+    const { db, doc, addDoc, updateDoc, collection, serverTimestamp } = window._fb;
+    if(id){
+      await updateDoc(doc(db, 'banners', id), data);
+      showToast('Banner updated', 'success');
+    } else {
+      data.createdAt = serverTimestamp();
+      await addDoc(collection(db, 'banners'), data);
+      showToast('Banner added', 'success');
+    }
+    closeBannerModal();
+  }catch(err){
+    showToast('Failed to save banner: ' + err.message, 'error');
+  }finally{
+    btn.disabled = false;
+    btn.textContent = 'Save Slide';
+  }
+}
+window.saveBanner = saveBanner;
+
+async function deleteBanner(id){
+  if(!confirm('Delete this banner slide?')) return;
+  try{
+    const { db, doc, deleteDoc } = window._fb;
+    await deleteDoc(doc(db, 'banners', id));
+    showToast('Banner deleted', 'success');
+  }catch(err){
+    showToast('Failed to delete: ' + err.message, 'error');
+  }
+}
+window.deleteBanner = deleteBanner;
 
 /* ---------------- SETTINGS ---------------- */
 async function loadSettings(){
