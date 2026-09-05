@@ -51,6 +51,17 @@ function showToast(msg, type=''){
     t.classList.remove('show');
   }, 2000);
 }
+
+function showOrderSuccessPopup(){
+  $('orderSuccessOverlay').classList.add('active');
+}
+window.showOrderSuccessPopup = showOrderSuccessPopup;
+
+function closeOrderSuccessPopup(){
+  $('orderSuccessOverlay').classList.remove('active');
+}
+window.closeOrderSuccessPopup = closeOrderSuccessPopup;
+
 function fmtMoney(n){ return CURRENCY + Number(n||0).toFixed(2); }
 function fmtDate(ts){
   if(!ts) return '—';
@@ -82,6 +93,13 @@ function loadCartFromMemory(){ /* cart is already in-memory; kept for clarity */
 
 /* ---------------- NAVIGATION ---------------- */
 function goTo(page){
+  // Stop and mute any playing product videos when leaving the detail page
+  if(page !== 'detail'){
+    document.querySelectorAll('.pd-video').forEach(v => {
+      v.pause();
+      v.muted = true;
+    });
+  }
   document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
   $('page-' + page).classList.add('active');
   document.querySelectorAll('.nav-btn').forEach(n => n.classList.remove('active'));
@@ -93,6 +111,77 @@ function goTo(page){
   window.scrollTo(0,0);
 }
 window.goTo = goTo;
+
+/* ---------------- BANNER CAROUSEL ---------------- */
+let bannerSlides = [];   // dynamic slides from Firestore (default banner.png is always slide 0 in the DOM)
+let bannerIndex = 0;
+let bannerTimer = null;
+
+function initBannerListener(){
+  const { onSnapshot, collection, query, orderBy, db } = window._fb;
+  try{
+    const q = query(collection(db, 'banners'), orderBy('order', 'asc'));
+    onSnapshot(q, (snap) => {
+      bannerSlides = [];
+      snap.forEach(d => {
+        const data = d.data();
+        if(data.active !== false) bannerSlides.push({ id: d.id, ...data });
+      });
+      renderBannerCarousel();
+    }, (err) => console.error('Banner load error:', err));
+  }catch(e){ console.error(e); }
+}
+
+function renderBannerCarousel(){
+  const track = $('bannerTrack');
+  const dotsWrap = $('bannerDots');
+  if(!track) return;
+
+  // Slide 0 is always the static default banner.png already in the HTML.
+  const defaultSlide = track.querySelector('.banner-slide');
+  track.innerHTML = '';
+  if(defaultSlide) track.appendChild(defaultSlide);
+
+  bannerSlides.forEach(b => {
+    const slide = document.createElement('div');
+    slide.className = 'banner-slide';
+    if(b.type === 'video'){
+      slide.innerHTML = `<video src="${escapeHtml(b.url)}" autoplay muted loop playsinline></video>`;
+    } else {
+      slide.innerHTML = `<img src="${escapeHtml(b.url)}" alt="Banner" onerror="this.closest('.banner-slide').style.display='none'">`;
+    }
+    if(b.link){
+      slide.style.cursor = 'pointer';
+      slide.onclick = () => window.open(b.link, '_blank');
+    }
+    track.appendChild(slide);
+  });
+
+  const totalSlides = track.children.length;
+  bannerIndex = 0;
+  track.style.transform = 'translateX(0%)';
+
+  if(totalSlides > 1){
+    dotsWrap.style.display = 'flex';
+    dotsWrap.innerHTML = Array.from({length: totalSlides}).map((_,i) =>
+      `<div class="banner-dot ${i===0?'active':''}"></div>`
+    ).join('');
+    startBannerAutoScroll(totalSlides);
+  } else {
+    dotsWrap.style.display = 'none';
+    clearInterval(bannerTimer);
+  }
+}
+
+function startBannerAutoScroll(totalSlides){
+  clearInterval(bannerTimer);
+  bannerTimer = setInterval(() => {
+    bannerIndex = (bannerIndex + 1) % totalSlides;
+    const track = $('bannerTrack');
+    track.style.transform = `translateX(-${bannerIndex * 100}%)`;
+    document.querySelectorAll('.banner-dot').forEach((d,i) => d.classList.toggle('active', i===bannerIndex));
+  }, 4000);
+}
 
 /* ---------------- PRODUCTS: LOAD + RENDER HOME ---------------- */
 function initProductsListener(){
@@ -350,11 +439,17 @@ function renderProductDetail(){
   const stock = getStock(p);
   const oos = isOutOfStock(p);
 
-  const mediaHtml = media.map(m => `
+  const mediaHtml = media.map((m,i) => `
     <div class="pd-media-item">
       ${m.type === 'image'
         ? `<img src="${escapeHtml(m.url)}" alt="${escapeHtml(p.name)}">`
-        : `<video src="${escapeHtml(m.url)}" controls playsinline></video>`}
+        : `<div class="video-wrap">
+             <video src="${escapeHtml(m.url)}" playsinline muted loop preload="metadata" class="pd-video" data-idx="${i}"></video>
+             <button class="mute-btn" onclick="toggleVideoMute(this)">
+               <svg class="icon-muted" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="16" height="16"><path d="M11 5L6 9H2v6h4l5 4V5z"/><line x1="23" y1="9" x2="17" y2="15"/><line x1="17" y1="9" x2="23" y2="15"/></svg>
+               <svg class="icon-unmuted" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="16" height="16" style="display:none;"><path d="M11 5L6 9H2v6h4l5 4V5z"/><path d="M19.07 4.93a10 10 0 0 1 0 14.14M15.54 8.46a5 5 0 0 1 0 7.07"/></svg>
+             </button>
+           </div>`}
     </div>
   `).join('');
 
@@ -431,7 +526,50 @@ function renderProductDetail(){
       </div>
     </div>
   `;
+  initVideoAutoplay();
 }
+
+/* Auto-play/pause videos in the gallery based on visibility, always muted
+   unless the customer explicitly taps the mute button. This avoids browser
+   autoplay-with-sound restrictions and matches expected mobile UX (like a
+   short product clip that plays quietly as you scroll to it). */
+let pdVideoObserver = null;
+function initVideoAutoplay(){
+  if(pdVideoObserver) pdVideoObserver.disconnect();
+  const videos = document.querySelectorAll('.pd-video');
+  if(!videos.length) return;
+
+  pdVideoObserver = new IntersectionObserver((entries) => {
+    entries.forEach(entry => {
+      const video = entry.target;
+      const btn = video.parentElement.querySelector('.mute-btn');
+      if(entry.isIntersecting && entry.intersectionRatio >= 0.6){
+        video.play().catch(()=>{});
+      } else {
+        video.pause();
+        // Re-mute automatically once the video is no longer being watched,
+        // so sound never keeps playing in the background while scrolling away.
+        if(!video.muted){
+          video.muted = true;
+          if(btn){
+            btn.querySelector('.icon-muted').style.display = 'block';
+            btn.querySelector('.icon-unmuted').style.display = 'none';
+          }
+        }
+      }
+    });
+  }, { threshold: [0, 0.6, 1] });
+
+  videos.forEach(v => pdVideoObserver.observe(v));
+}
+
+function toggleVideoMute(btn){
+  const video = btn.parentElement.querySelector('video');
+  video.muted = !video.muted;
+  btn.querySelector('.icon-muted').style.display = video.muted ? 'block' : 'none';
+  btn.querySelector('.icon-unmuted').style.display = video.muted ? 'none' : 'block';
+}
+window.toggleVideoMute = toggleVideoMute;
 
 function colorToCss(name){
   const map = { black:'#111',white:'#f5f5f5',navy:'#1e3a5f',blue:'#2563eb',red:'#dc2626',
@@ -847,7 +985,7 @@ async function placeOrder(){
     cart = [];
     updateCartBadge();
     closeCheckoutSheet();
-    showToast('Order placed successfully!', 'success');
+    showOrderSuccessPopup();
     goTo('orders');
   }catch(err){
     console.error(err);
@@ -1167,6 +1305,7 @@ document.addEventListener('DOMContentLoaded', () => {
       clearInterval(waitForFb);
       initAuthListener();
       initProductsListener();
+      initBannerListener();
     }
   }, 50);
 });
