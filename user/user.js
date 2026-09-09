@@ -52,13 +52,30 @@ function showToast(msg, type=''){
   }, 2000);
 }
 
+let successPopupTimer = null;
 function showOrderSuccessPopup(){
   const el = $('orderSuccessOverlay');
-  if(el) el.classList.add('active');
+  if(!el) return;
+  el.classList.add('active');
+  // Auto-close after one play-through so the GIF doesn't keep looping
+  // endlessly in front of the customer. Re-trigger the image so it
+  // always starts fresh from frame 1 instead of resuming mid-loop.
+  const img = el.querySelector('.success-gif');
+  if(img){
+    const src = img.getAttribute('src');
+    img.setAttribute('src', '');
+    void img.offsetWidth;
+    img.setAttribute('src', src);
+  }
+  clearTimeout(successPopupTimer);
+  successPopupTimer = setTimeout(() => {
+    closeOrderSuccessPopup();
+  }, 3200);
 }
 window.showOrderSuccessPopup = showOrderSuccessPopup;
 
 function closeOrderSuccessPopup(){
+  clearTimeout(successPopupTimer);
   const el = $('orderSuccessOverlay');
   if(el) el.classList.remove('active');
 }
@@ -651,13 +668,11 @@ window.buyNow = buyNow;
 /* ---------------- CART ---------------- */
 function updateCartBadge(){
   const count = cart.reduce((s,i) => s + i.qty, 0);
-  const badge1 = $('cartBadge');
   const badge2 = $('navCartBadge');
+  if(!badge2) return;
   if(count > 0){
-    badge1.style.display='flex'; badge1.textContent = count;
     badge2.style.display='flex'; badge2.textContent = count;
   } else {
-    badge1.style.display='none';
     badge2.style.display='none';
   }
 }
@@ -1266,6 +1281,111 @@ function closeReturnSheet(){
   $('returnSheet').classList.remove('active');
 }
 window.closeReturnSheet = closeReturnSheet;
+
+/* ---------------- PROFILE ---------------- */
+const SUPPORT_EMAIL = "amit784535@gmail.com";
+
+function openProfileSheet(){
+  renderProfileContent();
+  $('profileSheet').classList.add('active');
+}
+window.openProfileSheet = openProfileSheet;
+
+function closeProfileSheet(){
+  $('profileSheet').classList.remove('active');
+}
+window.closeProfileSheet = closeProfileSheet;
+
+function renderProfileContent(){
+  const wrap = $('profileContent');
+
+  const supportRow = `
+    <div class="profile-row" onclick="contactSupport()">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 4h16v16H4z" opacity="0"/><path d="M22 6l-10 7L2 6"/><rect x="2" y="4" width="20" height="16" rx="2"/></svg>
+      <div>
+        <div class="profile-row-text">Customer Support</div>
+        <div class="profile-row-sub">Email us with any question or issue</div>
+      </div>
+    </div>`;
+
+  if(!currentUser){
+    wrap.innerHTML = `
+      <div class="empty-state" style="padding:20px 4px 24px;">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
+        <div>You're not signed in</div>
+      </div>
+      <button class="btn btn-primary" style="margin-bottom:18px;" onclick="closeProfileSheet();switchAuthTab('login');openAuthSheet();">Sign In</button>
+      ${supportRow}
+    `;
+    return;
+  }
+
+  const name = currentUser.displayName || currentUser.email.split('@')[0];
+  const initial = name.charAt(0).toUpperCase();
+
+  wrap.innerHTML = `
+    <div class="profile-header">
+      <div class="profile-avatar">${escapeHtml(initial)}</div>
+      <div>
+        <div class="profile-name">${escapeHtml(name)}</div>
+        <div class="profile-email">${escapeHtml(currentUser.email)}</div>
+      </div>
+    </div>
+    ${supportRow}
+    <div class="profile-row" onclick="openAddressSheet(false)">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"/><circle cx="12" cy="10" r="3"/></svg>
+      <div class="profile-row-text">Saved Addresses</div>
+    </div>
+    <div class="profile-row" onclick="closeProfileSheet();goTo('orders');">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M6 2L3 6v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V6l-3-4z"/><path d="M3 6h18M16 10a4 4 0 0 1-8 0"/></svg>
+      <div class="profile-row-text">My Orders</div>
+    </div>
+    <div class="profile-row" onclick="switchAccount()">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M17 1l4 4-4 4"/><path d="M3 11V9a4 4 0 0 1 4-4h14"/><path d="M7 23l-4-4 4-4"/><path d="M21 13v2a4 4 0 0 1-4 4H3"/></svg>
+      <div class="profile-row-text">Switch Account</div>
+    </div>
+    <div class="profile-row danger" onclick="profileLogout()">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><path d="M16 17l5-5-5-5"/><path d="M21 12H9"/></svg>
+      <div class="profile-row-text">Logout</div>
+    </div>
+  `;
+}
+
+function contactSupport(){
+  const subject = encodeURIComponent('Customer Support Request — Testing T-Shirt');
+  const body = encodeURIComponent(
+    `Hi,\n\nI need help with:\n\n\n---\n${currentUser ? 'Account: ' + currentUser.email : 'Not signed in'}`
+  );
+  window.location.href = `mailto:${SUPPORT_EMAIL}?subject=${subject}&body=${body}`;
+}
+window.contactSupport = contactSupport;
+
+async function switchAccount(){
+  try{
+    const { signOut, auth } = window._fb;
+    await signOut(auth);
+    closeProfileSheet();
+    switchAuthTab('login');
+    openAuthSheet();
+  }catch(err){
+    showToast('Failed to switch account', 'error');
+  }
+}
+window.switchAccount = switchAccount;
+
+async function profileLogout(){
+  if(!confirm('Log out of your account?')) return;
+  try{
+    const { signOut, auth } = window._fb;
+    await signOut(auth);
+    closeProfileSheet();
+    showToast('Logged out', 'success');
+    goTo('home');
+  }catch(err){
+    showToast('Failed to log out', 'error');
+  }
+}
+window.profileLogout = profileLogout;
 
 async function submitReturnRequest(){
   const reason = $('returnComplaint').value.trim();
