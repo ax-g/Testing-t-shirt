@@ -572,9 +572,9 @@
 </div>
 
 <!-- ============ ORDER SUCCESS POPUP ============ -->
-<div class="success-overlay" id="orderSuccessOverlay" onclick="closeOrderSuccessPopup()">
-  <div class="success-card" onclick="event.stopPropagation()">
-    <img src="order-success.gif" alt="Order placed" class="success-gif" onerror="this.style.display='none'">
+<div class="success-overlay" id="orderSuccessOverlay">
+  <div class="success-card">
+    <video src="order-success.mp4" class="success-gif" muted playsinline autoplay onerror="this.style.display='none'"></video>
     <div class="success-title">Order Placed!</div>
     <div class="success-sub">We'll notify you as your order progresses.</div>
     <button class="btn btn-primary" onclick="closeOrderSuccessPopup()">Continue Shopping</button>

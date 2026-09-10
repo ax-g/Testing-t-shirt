@@ -52,34 +52,53 @@ function showToast(msg, type=''){
   }, 2000);
 }
 
-let successPopupTimer = null;
 function showOrderSuccessPopup(){
   const el = $('orderSuccessOverlay');
   if(!el) return;
   el.classList.add('active');
-  // Auto-close after one play-through so the GIF doesn't keep looping
-  // endlessly in front of the customer. Re-trigger the image so it
-  // always starts fresh from frame 1 instead of resuming mid-loop.
-  const img = el.querySelector('.success-gif');
-  if(img){
-    const src = img.getAttribute('src');
-    img.setAttribute('src', '');
-    void img.offsetWidth;
-    img.setAttribute('src', src);
+
+  // Restart the animation from frame 1 and let it play exactly once,
+  // then hold on the last frame (no looping) until the customer taps Continue.
+  const video = el.querySelector('.success-gif');
+  if(video){
+    video.loop = false;
+    video.currentTime = 0;
+    video.play().catch(()=>{});
   }
-  clearTimeout(successPopupTimer);
-  successPopupTimer = setTimeout(() => {
-    closeOrderSuccessPopup();
-  }, 3200);
+
+  // Short, gentle confirmation chime — not the video's own audio track.
+  playSuccessChime();
 }
 window.showOrderSuccessPopup = showOrderSuccessPopup;
 
 function closeOrderSuccessPopup(){
-  clearTimeout(successPopupTimer);
   const el = $('orderSuccessOverlay');
   if(el) el.classList.remove('active');
+  const video = el ? el.querySelector('.success-gif') : null;
+  if(video) video.pause();
 }
 window.closeOrderSuccessPopup = closeOrderSuccessPopup;
+
+function playSuccessChime(){
+  try{
+    const AudioCtx = window.AudioContext || window.webkitAudioContext;
+    const ctx = new AudioCtx();
+    const now = ctx.currentTime;
+    [880, 1318.5].forEach((freq, i) => {
+      const osc = ctx.createOscillator();
+      const gain = ctx.createGain();
+      osc.type = 'sine';
+      osc.frequency.value = freq;
+      const start = now + i * 0.09;
+      gain.gain.setValueAtTime(0, start);
+      gain.gain.linearRampToValueAtTime(0.12, start + 0.02);
+      gain.gain.exponentialRampToValueAtTime(0.001, start + 0.35);
+      osc.connect(gain).connect(ctx.destination);
+      osc.start(start);
+      osc.stop(start + 0.4);
+    });
+  }catch(e){ /* audio not available/blocked — silently skip */ }
+}
 
 function fmtMoney(n){ return CURRENCY + Number(n||0).toFixed(2); }
 function fmtDate(ts){
