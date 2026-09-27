@@ -20,7 +20,7 @@
     background:var(--white);color:var(--black);text-align:center;padding:24px;
   }
   .logo{margin-bottom:36px;}
-  .logo img{height:30px;object-fit:contain;}
+  .logo img{height:52px;object-fit:contain;}
   .logo .fallback{display:none;font-weight:800;font-size:18px;letter-spacing:-.4px;}
   .code{font-size:96px;font-weight:800;letter-spacing:-4px;line-height:1;margin-bottom:8px;}
   .title{font-size:20px;font-weight:700;margin-bottom:10px;}
@@ -35,7 +35,6 @@
   .btn-primary:hover{background:#1a1a1a;}
   .btn-outline{background:#fff;color:var(--black);border:1.5px solid var(--gray-300);}
   .btn-outline:hover{border-color:var(--black);}
-  .tshirt-icon{width:64px;height:64px;color:var(--gray-300);margin-bottom:20px;}
 </style>
 </head>
 <body>
@@ -44,18 +43,13 @@
     <div class="fallback">TESTING T-SHIRT</div>
   </div>
 
-  <svg class="tshirt-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
-    <path d="M16 3l3 3-2.5 2.5L14 6l-2 2-2-2-2.5 2.5L5 6l3-3 2-1h4l2 1z"/>
-    <path d="M7 8v13h10V8"/>
-  </svg>
-
   <div class="code">404</div>
   <div class="title">This page doesn't exist</div>
   <div class="sub">The page you're looking for may have been moved, renamed, or never existed. Let's get you back on track.</div>
 
   <div class="actions">
-    <a href="user.html" class="btn btn-primary">Back to Home</a>
-    <a href="user.html" class="btn btn-outline" onclick="window.history.back();return false;">Go Back</a>
+    <a href="user/index.html" class="btn btn-primary">Back to Home</a>
+    <a href="#" class="btn btn-outline" onclick="window.history.back();return false;">Go Back</a>
   </div>
 </body>
 </html>
