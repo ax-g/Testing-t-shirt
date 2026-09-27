@@ -1327,6 +1327,16 @@ function renderProfileContent(){
       </div>
     </div>`;
 
+  const policyRows = `
+    <div class="profile-row" onclick="window.open('privacy-policy.html','_blank')">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2l8 4v6c0 5-3.5 9-8 10-4.5-1-8-5-8-10V6l8-4z"/></svg>
+      <div class="profile-row-text">Privacy Policy</div>
+    </div>
+    <div class="profile-row" onclick="window.open('cookie-policy.html','_blank')">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><circle cx="8.5" cy="10.5" r="1"/><circle cx="14" cy="8.5" r="1"/><circle cx="15" cy="14.5" r="1"/><circle cx="9.5" cy="15" r="1"/></svg>
+      <div class="profile-row-text">Cookie Policy</div>
+    </div>`;
+
   if(!currentUser){
     wrap.innerHTML = `
       <div class="empty-state" style="padding:20px 4px 24px;">
@@ -1335,6 +1345,7 @@ function renderProfileContent(){
       </div>
       <button class="btn btn-primary" style="margin-bottom:18px;" onclick="closeProfileSheet();switchAuthTab('login');openAuthSheet();">Sign In</button>
       ${supportRow}
+      ${policyRows}
     `;
     return;
   }
@@ -1359,6 +1370,7 @@ function renderProfileContent(){
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M6 2L3 6v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V6l-3-4z"/><path d="M3 6h18M16 10a4 4 0 0 1-8 0"/></svg>
       <div class="profile-row-text">My Orders</div>
     </div>
+    ${policyRows}
     <div class="profile-row" onclick="switchAccount()">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M17 1l4 4-4 4"/><path d="M3 11V9a4 4 0 0 1 4-4h14"/><path d="M7 23l-4-4 4-4"/><path d="M21 13v2a4 4 0 0 1-4 4H3"/></svg>
       <div class="profile-row-text">Switch Account</div>
@@ -1380,6 +1392,8 @@ function contactSupport(){
 window.contactSupport = contactSupport;
 
 async function switchAccount(){
+  const confirmed = confirm('You will be logged out of this account on this website. Continue to switch account?');
+  if(!confirmed) return;
   try{
     const { signOut, auth } = window._fb;
     await signOut(auth);
