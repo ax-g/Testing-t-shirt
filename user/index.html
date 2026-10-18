@@ -593,8 +593,8 @@
     GoogleAuthProvider, signInWithPopup
   } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js";
   import {
-    getFirestore, collection, doc, getDoc, getDocs, addDoc, updateDoc,
-    query, where, orderBy, onSnapshot, serverTimestamp, setDoc, limit
+    getFirestore, collection, doc, getDoc, getDocs, addDoc, updateDoc, deleteDoc,
+    query, where, orderBy, onSnapshot, serverTimestamp, setDoc, limit, runTransaction
   } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
 
   // =====================================================
@@ -617,9 +617,10 @@
   window._fb = { app, auth, db, googleProvider,
     signInWithEmailAndPassword, createUserWithEmailAndPassword, onAuthStateChanged, signOut, updateProfile,
     signInWithPopup,
-    collection, doc, getDoc, getDocs, addDoc, updateDoc, query, where, orderBy, onSnapshot, serverTimestamp, setDoc, limit
+    collection, doc, getDoc, getDocs, addDoc, updateDoc, deleteDoc, query, where, orderBy, onSnapshot, serverTimestamp, setDoc, limit, runTransaction
   };
 </script>
+<script src="invoice.js"></script>
 <script src="user.js"></script>
 </body>
 </html>

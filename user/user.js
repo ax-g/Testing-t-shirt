@@ -1014,6 +1014,10 @@ async function placeOrder(){
       await saveAddressToProfile({ name, phone, address, city, state, pincode });
     }
 
+    // Issue the invoice number + snapshot now. Fire-and-forget: if it fails (e.g. offline),
+    // it is created automatically the first time the customer or admin opens the invoice.
+    if(window.Invoice){ Invoice.ensure(orderId).catch(err => console.warn('Invoice will be created on first view:', err)); }
+
     // NOTE: Admin email notification is triggered server-side via a Cloud
     // Function listening on orders/{orderId} onCreate (see functions/index.js).
     // No client-side email sending occurs here — this keeps it secure.
@@ -1135,6 +1139,19 @@ function showNewAddressForm(){
 }
 window.showNewAddressForm = showNewAddressForm;
 
+/* ---------------- INVOICES ---------------- */
+// mode: 'view' | 'download' | 'print'   (all logic lives in invoice.js)
+function invoiceAction(orderId, mode){
+  if(!window.Invoice){ showToast('Invoice feature is not loaded — make sure invoice.js is uploaded next to this page', 'error'); return; }
+  Invoice.open(orderId, { mode });
+}
+window.invoiceAction = invoiceAction;
+
+// An invoice exists for every order, except a cancelled order that never got one
+function orderHasInvoiceAccess(o){
+  return !(o.orderStatus === 'Cancelled' && !(o.invoice && o.invoice.number));
+}
+
 /* ---------------- ORDERS ---------------- */
 let myOrders = [];
 
@@ -1214,6 +1231,11 @@ function renderOrdersPage(){
         <span style="font-weight:800;">${fmtMoney(o.finalTotal)}</span>
       </div>
       ${o.returnStatus ? `<div style="margin-top:8px;"><span class="badge badge-${o.returnStatus==='Approved'?'delivered':(o.returnStatus==='Rejected'?'cancelled':'pending')}">Return: ${escapeHtml(o.returnStatus)}</span></div>` : ''}
+      ${orderHasInvoiceAccess(o) ? `
+      <div class="order-actions" onclick="event.stopPropagation()">
+        <button class="btn btn-outline" onclick="invoiceAction('${o.id}','view')">View Invoice</button>
+        <button class="btn btn-outline" onclick="invoiceAction('${o.id}','download')">Download PDF</button>
+      </div>` : ''}
     </div>
   `).join('');
 }
@@ -1266,6 +1288,13 @@ function openOrderDetail(orderId){
     <div class="pd-desc">${escapeHtml(o.customerName)}<br>${escapeHtml(o.address)}, ${escapeHtml(o.city)}, ${escapeHtml(o.state)} - ${escapeHtml(o.pincode)}<br>${escapeHtml(o.customerPhone)}</div>
     <div class="pd-section-title" style="margin-top:16px;">Payment</div>
     <div class="pd-desc">${escapeHtml(o.paymentMethod)} · <span class="badge badge-${(o.paymentStatus||'unpaid').toLowerCase().replace(/\s/g,'')}">${escapeHtml(o.paymentStatus)}</span></div>
+    ${orderHasInvoiceAccess(o) ? `
+    <div class="pd-section-title" style="margin-top:16px;">Invoice${o.invoice && o.invoice.number ? ' · ' + escapeHtml(o.invoice.number) : ''}</div>
+    <div class="order-actions" style="flex-wrap:wrap;">
+      <button class="btn btn-outline" onclick="invoiceAction('${o.id}','view')">View Invoice</button>
+      <button class="btn btn-outline" onclick="invoiceAction('${o.id}','download')">Download PDF</button>
+      <button class="btn btn-outline" onclick="invoiceAction('${o.id}','print')">Print Invoice</button>
+    </div>` : ''}
     <div class="order-actions" style="flex-direction:column;">${actionsHtml}</div>
   `;
   $('orderDetailSheet').classList.add('active');
