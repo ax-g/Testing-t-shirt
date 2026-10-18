@@ -322,6 +322,8 @@ function openProductModal(productId){
     $('pSalePrice').value = p.salePrice ?? '';
     $('pDiscountPercent').value = p.discountPercent ?? '';
     $('pOfferText').value = p.offerText || '';
+    $('pGstRate').value = p.gstRate ?? '';
+    $('pHsn').value = p.hsn || '';
     $('pImage1').value = p.image1 || '';
     $('pImage2').value = p.image2 || '';
     $('pImage3').value = p.image3 || '';
@@ -334,7 +336,7 @@ function openProductModal(productId){
     showExistingMediaPreviews(p);
   } else {
     ['pName','pDescription','pCategory','pPrice','pOriginalPrice','pSalePrice',
-     'pDiscountPercent','pOfferText','pImage1','pImage2','pImage3','pImage4',
+     'pDiscountPercent','pOfferText','pGstRate','pHsn','pImage1','pImage2','pImage3','pImage4',
      'pVideoUrl','pStock'].forEach(id => $(id).value = '');
     $('pSaleEnabled').checked = false;
     $('pVisibility').value = 'active';
@@ -441,6 +443,10 @@ async function saveProduct(){
   if(!name){ showToast('Product name is required', 'error'); return; }
   if(!price || price <= 0){ showToast('Valid price is required', 'error'); return; }
   if(!image1){ showToast('Image 1 is required', 'error'); return; }
+  const gstRateStr = $('pGstRate').value.trim();
+  if(gstRateStr !== '' && (isNaN(Number(gstRateStr)) || Number(gstRateStr) < 0 || Number(gstRateStr) > 100)){
+    showToast('GST rate must be a number between 0 and 100', 'error'); return;
+  }
 
   const saleEnabled = $('pSaleEnabled').checked;
 
@@ -454,6 +460,8 @@ async function saveProduct(){
     salePrice: saleEnabled ? (parseFloat($('pSalePrice').value) || price) : null,
     discountPercent: saleEnabled ? (parseFloat($('pDiscountPercent').value) || null) : null,
     offerText: $('pOfferText').value.trim() || null,
+    gstRate: gstRateStr === '' ? null : Number(gstRateStr),
+    hsn: $('pHsn').value.trim() || null,
     image1,
     image2: $('pImage2').value.trim() || null,
     image3: $('pImage3').value.trim() || null,
@@ -603,6 +611,15 @@ function openOrderModal(orderId){
         <div><strong>Method:</strong> ${escapeHtml(o.paymentMethod)}</div>
         <div><strong>Payment Status:</strong> <span class="badge badge-${(o.paymentStatus||'unpaid').toLowerCase()}">${escapeHtml(o.paymentStatus)}</span></div>
       </div>
+    </div>
+    <div class="form-section">
+      <div class="form-section-title">Invoice${o.invoice && o.invoice.number ? ' — ' + escapeHtml(o.invoice.number) : ''}</div>
+      <div style="display:flex;gap:8px;flex-wrap:wrap;">
+        <button class="btn btn-outline btn-sm" onclick="adminInvoice('${o.id}','view')">View Invoice</button>
+        <button class="btn btn-outline btn-sm" onclick="adminInvoice('${o.id}','download')">Download PDF</button>
+        <button class="btn btn-outline btn-sm" onclick="adminInvoice('${o.id}','print')">Print Invoice</button>
+      </div>
+      <div class="hint" style="margin-top:8px;">${o.invoice && o.invoice.number ? 'Invoice issued. Inside the invoice, "Refresh business details" re-applies your latest address / GST settings (number and date stay the same).' : 'No invoice yet — opening it creates one. Numbers are never duplicated.'}</div>
     </div>
     <div class="form-section">
       <div class="form-section-title">Order Status</div>
@@ -798,6 +815,7 @@ window.deleteBanner = deleteBanner;
 
 /* ---------------- SETTINGS ---------------- */
 async function loadSettings(){
+  loadInvoiceSettings();
   try{
     const { db, doc, getDoc } = window._fb;
     const snap = await getDoc(doc(db, 'config', 'store'));
@@ -824,6 +842,75 @@ async function saveSettings(){
   }
 }
 window.saveSettings = saveSettings;
+
+/* ---------------- INVOICES ---------------- */
+function adminInvoice(orderId, mode){
+  if(!window.Invoice){ showToast('Invoice feature is not loaded — make sure invoice.js is uploaded next to admin.html', 'error'); return; }
+  Invoice.open(orderId, { mode, admin: true });
+}
+window.adminInvoice = adminInvoice;
+
+function toggleInvGst(){
+  $('invGstFields').style.display = $('invGstEnabled').checked ? 'block' : 'none';
+}
+window.toggleInvGst = toggleInvGst;
+
+async function loadInvoiceSettings(){
+  try{
+    const { db, doc, getDoc } = window._fb;
+    const snap = await getDoc(doc(db, 'publicConfig', 'invoice'));
+    if(!snap.exists()) return;
+    const d = snap.data();
+    $('invSellerName').value = d.sellerName || '';
+    $('invAddress').value = d.address || '';
+    $('invCity').value = d.city || '';
+    $('invState').value = d.state || '';
+    $('invPincode').value = d.pincode || '';
+    $('invPhone').value = d.phone || '';
+    $('invEmail').value = d.email || '';
+    $('invPrefix').value = d.prefix || '';
+    $('invGstEnabled').checked = !!d.gstEnabled;
+    $('invGstin').value = d.gstin || '';
+    $('invDefaultRate').value = (d.defaultGstRate === null || d.defaultGstRate === undefined) ? '' : d.defaultGstRate;
+    $('invDefaultHsn').value = d.defaultHsn || '';
+    $('invFooterNote').value = d.footerNote || '';
+    toggleInvGst();
+  }catch(e){ console.error('Invoice settings load failed:', e); }
+}
+
+async function saveInvoiceSettings(){
+  const v = id => ($(id).value || '').trim();
+  const gstEnabled = $('invGstEnabled').checked;
+  const gstin = v('invGstin').toUpperCase();
+  const rateStr = v('invDefaultRate');
+  const prefix = (v('invPrefix').toUpperCase().replace(/[^A-Z0-9]/g, '') || 'TTS').slice(0, 4);
+
+  if(gstEnabled){
+    // Format check only — it cannot confirm the GSTIN is registered or belongs to you.
+    if(!/^[0-9]{2}[A-Z]{5}[0-9]{4}[A-Z]{1}[1-9A-Z]{1}Z[0-9A-Z]{1}$/.test(gstin)){ showToast('Enter a valid 15-character GSTIN (e.g. 22AAAAA0000A1Z5)', 'error'); return; }
+    if(!v('invAddress')){ showToast('Business address is required for GST invoices', 'error'); return; }
+    if(!v('invState')){ showToast('State is required for GST invoices (decides CGST/SGST vs IGST)', 'error'); return; }
+    if(rateStr === '' || isNaN(Number(rateStr)) || Number(rateStr) < 0 || Number(rateStr) > 100){ showToast('Enter the default GST rate (0–100)', 'error'); return; }
+  }
+
+  try{
+    const { db, doc, setDoc, serverTimestamp } = window._fb;
+    await setDoc(doc(db, 'publicConfig', 'invoice'), {
+      sellerName: v('invSellerName'), address: v('invAddress'), city: v('invCity'), state: v('invState'),
+      pincode: v('invPincode'), phone: v('invPhone'), email: v('invEmail'), prefix,
+      gstEnabled, gstin,
+      defaultGstRate: rateStr === '' ? null : Number(rateStr),
+      defaultHsn: v('invDefaultHsn'), footerNote: v('invFooterNote'),
+      updatedAt: serverTimestamp()
+    });
+    $('invPrefix').value = prefix;
+    if(window.Invoice && Invoice.clearConfigCache) Invoice.clearConfigCache();
+    showToast('Invoice settings saved', 'success');
+  }catch(err){
+    showToast('Failed to save invoice settings: ' + err.message, 'error');
+  }
+}
+window.saveInvoiceSettings = saveInvoiceSettings;
 
 /* ---------------- INIT ---------------- */
 document.addEventListener('DOMContentLoaded', () => {

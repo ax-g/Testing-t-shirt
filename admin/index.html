@@ -446,6 +446,44 @@
             <button class="btn btn-primary" onclick="saveSettings()">Save Settings</button>
           </div>
         </div>
+
+        <div class="card" style="max-width:520px;margin-top:20px;">
+          <div class="card-header"><div class="card-title">Invoice &amp; GST Settings</div></div>
+          <div style="padding:20px;">
+            <div class="hint" style="margin-bottom:16px;">These details are printed on every customer invoice. Changes apply to <strong>new</strong> invoices; to update an existing one, open it from the order and tap "Refresh business details".</div>
+            <div class="field"><label>Business / Seller Name</label><input type="text" id="invSellerName" placeholder="Testing T-Shirt"></div>
+            <div class="field"><label>Business Address</label><textarea id="invAddress" rows="2" placeholder="Shop no, street, area"></textarea></div>
+            <div class="form-grid">
+              <div class="field"><label>City</label><input type="text" id="invCity"></div>
+              <div class="field"><label>State</label><input type="text" id="invState" placeholder="e.g. West Bengal"></div>
+              <div class="field"><label>PIN Code</label><input type="text" id="invPincode"></div>
+              <div class="field"><label>Phone</label><input type="tel" id="invPhone"></div>
+              <div class="field full"><label>Email on invoice</label><input type="email" id="invEmail" placeholder="you@example.com"></div>
+              <div class="field full">
+                <label>Invoice Number Prefix</label>
+                <input type="text" id="invPrefix" maxlength="4" placeholder="TTS">
+                <div class="hint">Up to 4 letters/digits. Invoices look like <strong>TTS/25-26/00001</strong> and the count restarts each financial year (1 April).</div>
+              </div>
+            </div>
+
+            <div class="form-section-title" style="margin-top:8px;">GST (optional)</div>
+            <div class="toggle-row">
+              <label style="margin:0;font-weight:600;">Issue GST tax invoices</label>
+              <label class="switch"><input type="checkbox" id="invGstEnabled" onchange="toggleInvGst()"><span class="slider"></span></label>
+            </div>
+            <div id="invGstFields" style="display:none;">
+              <div class="field"><label>Your GSTIN</label><input type="text" id="invGstin" placeholder="15-character GSTIN" maxlength="15" style="text-transform:uppercase;"></div>
+              <div class="form-grid">
+                <div class="field"><label>Default GST Rate %</label><input type="number" id="invDefaultRate" step="0.01" min="0" placeholder="Enter your applicable rate"></div>
+                <div class="field"><label>Default HSN Code</label><input type="text" id="invDefaultHsn" placeholder="Optional"></div>
+              </div>
+              <div class="hint" style="margin-bottom:14px;">Your listed prices are treated as <strong>GST-inclusive</strong>: the customer pays exactly the price shown and the invoice splits it into taxable value + tax. You can override the rate/HSN per product in the product form. Rates are not pre-filled &mdash; enter the ones that apply to your products and confirm them with your accountant. This tool formats invoices from the details you enter; it does not check tax compliance for you.</div>
+            </div>
+
+            <div class="field"><label>Invoice Footer Note (optional)</label><textarea id="invFooterNote" rows="2" placeholder="e.g. Returns accepted within 7 days of delivery."></textarea></div>
+            <button class="btn btn-primary" onclick="saveInvoiceSettings()">Save Invoice Settings</button>
+          </div>
+        </div>
       </div>
     </main>
   </div>
@@ -510,6 +548,15 @@
             <label>Offer Text</label>
             <input type="text" id="pOfferText" placeholder="Buy 2 Get 10% Off">
           </div>
+          <div class="field">
+            <label>GST Rate % (optional)</label>
+            <input type="number" id="pGstRate" placeholder="Store default" step="0.01" min="0">
+          </div>
+          <div class="field">
+            <label>HSN Code (optional)</label>
+            <input type="text" id="pHsn" placeholder="Store default">
+          </div>
+          <div class="hint full" style="grid-column:1/-1;">Only used on invoices when GST is turned on in Settings &rarr; Invoice &amp; GST.</div>
         </div>
       </div>
 
@@ -698,7 +745,7 @@
   } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js";
   import {
     getFirestore, collection, doc, getDoc, getDocs, addDoc, updateDoc, deleteDoc,
-    query, orderBy, onSnapshot, serverTimestamp, setDoc, limit
+    query, orderBy, onSnapshot, serverTimestamp, setDoc, limit, runTransaction
   } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
 
   // =====================================================
@@ -721,10 +768,11 @@
   window._fb = { app, auth, db,
     signInWithEmailAndPassword, onAuthStateChanged, signOut,
     collection, doc, getDoc, getDocs, addDoc, updateDoc, deleteDoc,
-    query, orderBy, onSnapshot, serverTimestamp, setDoc, limit
+    query, orderBy, onSnapshot, serverTimestamp, setDoc, limit, runTransaction
   };
 </script>
 <script src="https://unpkg.com/imagekit-javascript/dist/imagekit.min.js"></script>
+<script src="invoice.js"></script>
 <script src="admin.js"></script>
 </body>
 </html>
