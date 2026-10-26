@@ -175,6 +175,7 @@ function initAuthListener(){
           initProductsListener();
           initOrdersListener();
           initBannersListener();
+          initPaymentsListeners();
           loadSettings();
         } else {
           // Not an authorized admin — sign out immediately
@@ -536,6 +537,7 @@ function initOrdersListener(){
       snap.forEach(d => allOrders.push({ id: d.id, ...d.data() }));
       renderOrdersTable();
       refreshStats();
+      renderPayments();
     }, (err) => {
       console.error('Orders listener error:', err);
       showToast('Failed to load orders: ' + err.message, 'error');
@@ -612,6 +614,19 @@ function openOrderModal(orderId){
         <div><strong>Payment Status:</strong> <span class="badge badge-${(o.paymentStatus||'unpaid').toLowerCase()}">${escapeHtml(o.paymentStatus)}</span></div>
       </div>
     </div>
+    ${o.paymentMethod === 'UPI' && o.upi ? `
+    <div class="form-section">
+      <div class="form-section-title">UPI Payment</div>
+      <div class="form-grid">
+        <div><strong>Customer pays:</strong> ${fmtMoney((o.upi.payablePaise||0)/100)}</div>
+        <div><strong>Verification discount:</strong> ${fmtMoney((o.upi.adjustmentPaise||0)/100)}</div>
+        <div><strong>Status:</strong> <span class="badge badge-${(o.paymentStatus||'unpaid').toLowerCase()}">${escapeHtml(o.paymentStatus)}</span></div>
+        <div><strong>Confirmed by:</strong> ${o.upi.confirmedBy ? (o.upi.confirmedBy === 'auto' ? 'Verification script' : 'Admin') : '—'}</div>
+      </div>
+      ${o.paymentStatus === 'Awaiting Payment' && o.orderStatus !== 'Cancelled' ? `
+      <div class="hint" style="margin:10px 0;">Only mark as paid after you have seen the money arrive.</div>
+      <button class="btn btn-primary btn-sm" onclick="markUpiPaid('${o.id}')">Mark as Paid</button>` : ''}
+    </div>` : ''}
     <div class="form-section">
       <div class="form-section-title">Invoice${o.invoice && o.invoice.number ? ' — ' + escapeHtml(o.invoice.number) : ''}</div>
       <div style="display:flex;gap:8px;flex-wrap:wrap;">
@@ -816,6 +831,7 @@ window.deleteBanner = deleteBanner;
 /* ---------------- SETTINGS ---------------- */
 async function loadSettings(){
   loadInvoiceSettings();
+  loadUpiSettings();
   try{
     const { db, doc, getDoc } = window._fb;
     const snap = await getDoc(doc(db, 'config', 'store'));
@@ -842,6 +858,156 @@ async function saveSettings(){
   }
 }
 window.saveSettings = saveSettings;
+
+/* ---------------- UPI PAYMENTS ---------------- */
+let upiDetected = [];
+let upiMeta = null;
+let upiReadError = false;
+
+function fmtDateTime(ts){
+  if(!ts) return '—';
+  const d = ts.toDate ? ts.toDate() : new Date(ts);
+  return d.toLocaleString('en-IN', { day:'2-digit', month:'short', hour:'2-digit', minute:'2-digit' });
+}
+
+function initPaymentsListeners(){
+  const { onSnapshot, collection, query, orderBy, limit, doc, db } = window._fb;
+  try{
+    onSnapshot(query(collection(db, 'upiPayments'), orderBy('createdAt', 'desc'), limit(40)), snap => {
+      upiDetected = [];
+      snap.forEach(d => upiDetected.push({ id: d.id, ...d.data() }));
+      upiReadError = false;
+      renderPayments();
+    }, err => { console.error('upiPayments:', err); upiReadError = true; renderPayments(); });
+    onSnapshot(doc(db, 'upiMeta', 'status'), snap => {
+      upiMeta = snap.exists() ? snap.data() : null;
+      renderPayments();
+    }, err => { console.error('upiMeta:', err); upiReadError = true; renderPayments(); });
+  }catch(e){ console.error(e); }
+}
+
+function renderPayments(){
+  if(!$('upiScriptStatus')) return;
+
+  // --- script health ---
+  let html;
+  if(upiReadError){
+    html = '<span class="badge badge-cancelled">Cannot read</span> Publish the latest Firestore rules, then reload this page.';
+  } else if(!upiMeta){
+    html = '<span class="badge badge-pending">Not started</span> The verification script has not reported yet. Until it runs, confirm payments yourself with <strong>Mark as Paid</strong>.';
+  } else {
+    const last = upiMeta.lastRun && upiMeta.lastRun.toDate ? upiMeta.lastRun.toDate() : null;
+    const ageMin = last ? (Date.now() - last.getTime()) / 60000 : Infinity;
+    const running = ageMin <= 5;
+    html = (running ? '<span class="badge badge-delivered">Running</span>' : '<span class="badge badge-cancelled">Not running</span>') +
+      ' Last check: <strong>' + (last ? fmtDateTime(last) : '—') + '</strong> (' + (isFinite(ageMin) ? Math.max(0, Math.round(ageMin)) + ' min ago' : 'never') + ')' +
+      '<div style="margin-top:8px;color:var(--gray-700);">Automatic confirmation: <strong>' +
+      (upiMeta.autoConfirm ? 'ON (' + escapeHtml((upiMeta.allowedDomains || []).join(', ')) + ')' : 'OFF — only recording emails') + '</strong></div>' +
+      (upiMeta.lastError ? '<div style="margin-top:8px;color:var(--danger);">Last error: ' + escapeHtml(upiMeta.lastError) + '</div>' : '') +
+      (!running ? '<div class="hint" style="margin-top:8px;">The script has stopped. Open script.google.com and check Triggers / Executions, or run <strong>setup</strong> again.</div>' : '');
+  }
+  $('upiScriptStatus').innerHTML = html;
+
+  // --- awaiting payment ---
+  const awaiting = allOrders.filter(o => o.paymentMethod === 'UPI' && o.paymentStatus === 'Awaiting Payment' && o.orderStatus !== 'Cancelled')
+    .sort((a,b) => (b.createdAt?.seconds||0) - (a.createdAt?.seconds||0));
+  $('awaitingBody').innerHTML = awaiting.length ? awaiting.map(o => `
+    <tr>
+      <td style="font-weight:600;">#${escapeHtml(o.orderId||o.id)}</td>
+      <td>${escapeHtml(o.customerName||'—')}</td>
+      <td style="font-weight:700;">${fmtMoney((o.upi && o.upi.payablePaise ? o.upi.payablePaise : Math.round((o.finalTotal||0)*100))/100)}</td>
+      <td>${fmtDateTime(o.createdAt)}</td>
+      <td><div class="row-flex">
+        <button class="btn btn-primary btn-sm" onclick="markUpiPaid('${o.id}')">Mark as Paid</button>
+        <button class="btn btn-outline btn-sm" onclick="cancelUpiOrder('${o.id}')">Cancel</button>
+      </div></td>
+    </tr>`).join('')
+    : '<tr><td colspan="5" style="text-align:center;color:var(--gray-500);padding:30px;">No orders are waiting for payment</td></tr>';
+
+  // --- emails seen by the script ---
+  const cls = { matched:'badge-delivered', unmatched:'badge-cancelled', rejected:'badge-cancelled', unverified:'badge-pending' };
+  const label = { matched:'Matched', unmatched:'No match', rejected:'Rejected', unverified:'Not verified' };
+  $('detectedBody').innerHTML = upiDetected.length ? upiDetected.map(p => `
+    <tr>
+      <td>${fmtDateTime(p.receivedAt)}</td>
+      <td style="font-weight:700;">${fmtMoney((p.amountPaise||0)/100)}</td>
+      <td><span class="badge ${cls[p.status]||'badge-pending'}">${label[p.status]||escapeHtml(p.status)}</span></td>
+      <td>${p.orderId ? '#' + escapeHtml(p.orderId) : '—'}</td>
+      <td style="white-space:normal;min-width:220px;font-size:12px;color:var(--gray-700);">${escapeHtml(p.reason||'')}<br><span style="color:var(--gray-500);">${escapeHtml(p.from||'')} · ${escapeHtml(p.auth||'')}</span></td>
+    </tr>`).join('')
+    : '<tr><td colspan="5" style="text-align:center;color:var(--gray-500);padding:30px;">No payment emails seen yet</td></tr>';
+}
+window.renderPayments = renderPayments;
+
+async function markUpiPaid(orderId){
+  const o = allOrders.find(x => x.id === orderId);
+  if(!o) return;
+  const amt = fmtMoney((o.upi && o.upi.payablePaise ? o.upi.payablePaise : Math.round((o.finalTotal||0)*100))/100);
+  if(!confirm('Mark order #' + (o.orderId||o.id) + ' as PAID?\n\nOnly do this if you have seen ' + amt + ' arrive in your account.')) return;
+  try{
+    const { db, doc, updateDoc, deleteDoc, serverTimestamp } = window._fb;
+    await updateDoc(doc(db, 'orders', orderId), {
+      paymentStatus: 'Paid',
+      orderStatus: o.orderStatus === 'Pending' ? 'Confirmed' : o.orderStatus,
+      upi: Object.assign({}, o.upi || {}, { paidAt: serverTimestamp(), confirmedBy: 'admin' }),
+      updatedAt: serverTimestamp()
+    });
+    if(o.upi && o.upi.lockId){ try{ await deleteDoc(doc(db, 'upiLocks', o.upi.lockId)); }catch(e){ /* it just expires */ } }
+    showToast('Order marked as paid', 'success');
+    if($('orderModalOverlay').classList.contains('active')) closeOrderModal();
+  }catch(err){
+    showToast('Failed: ' + err.message, 'error');
+  }
+}
+window.markUpiPaid = markUpiPaid;
+
+async function cancelUpiOrder(orderId){
+  const o = allOrders.find(x => x.id === orderId);
+  if(!o) return;
+  if(!confirm('Cancel order #' + (o.orderId||o.id) + '? The customer will see it as cancelled.')) return;
+  try{
+    const { db, doc, updateDoc, deleteDoc, serverTimestamp } = window._fb;
+    await updateDoc(doc(db, 'orders', orderId), { orderStatus: 'Cancelled', updatedAt: serverTimestamp() });
+    if(o.upi && o.upi.lockId){ try{ await deleteDoc(doc(db, 'upiLocks', o.upi.lockId)); }catch(e){} }
+    showToast('Order cancelled', 'success');
+  }catch(err){
+    showToast('Failed: ' + err.message, 'error');
+  }
+}
+window.cancelUpiOrder = cancelUpiOrder;
+
+async function loadUpiSettings(){
+  try{
+    const { db, doc, getDoc } = window._fb;
+    const snap = await getDoc(doc(db, 'publicConfig', 'payments'));
+    if(!snap.exists()) return;
+    const d = snap.data();
+    $('upiEnabled').checked = !!d.upiEnabled;
+    $('upiId').value = d.upiId || '';
+    $('upiPayee').value = d.payeeName || '';
+    $('upiWindow').value = d.windowMinutes || '';
+  }catch(e){ console.error('UPI settings load failed:', e); }
+}
+
+async function saveUpiSettings(){
+  const enabled = $('upiEnabled').checked;
+  const upiId = ($('upiId').value || '').trim();
+  const payee = ($('upiPayee').value || '').trim();
+  const winStr = ($('upiWindow').value || '').trim();
+  const windowMinutes = winStr === '' ? 15 : Number(winStr);
+  if(enabled && !/^[a-zA-Z0-9.\-_]{2,256}@[a-zA-Z][a-zA-Z0-9.]{1,63}$/.test(upiId)){ showToast('Enter a valid UPI ID, like name@fampay', 'error'); return; }
+  if(isNaN(windowMinutes) || windowMinutes < 5 || windowMinutes > 60){ showToast('Time to pay must be between 5 and 60 minutes', 'error'); return; }
+  try{
+    const { db, doc, setDoc, serverTimestamp } = window._fb;
+    await setDoc(doc(db, 'publicConfig', 'payments'), {
+      upiEnabled: enabled, upiId, payeeName: payee, windowMinutes: Math.floor(windowMinutes), updatedAt: serverTimestamp()
+    });
+    showToast('UPI settings saved', 'success');
+  }catch(err){
+    showToast('Failed to save UPI settings: ' + err.message, 'error');
+  }
+}
+window.saveUpiSettings = saveUpiSettings;
 
 /* ---------------- INVOICES ---------------- */
 function adminInvoice(orderId, mode){
