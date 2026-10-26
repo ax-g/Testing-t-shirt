@@ -206,6 +206,8 @@
   .badge-shipped{background:#cffafe;color:#155e75;}
   .badge-delivered{background:#dcfce7;color:#166534;}
   .badge-cancelled{background:#fee2e2;color:#991b1b;}
+  .badge-awaitingpayment{background:#fef3c7;color:#92400e;}
+  .badge-paid{background:#dcfce7;color:#166534;}
   .order-thumbs{display:flex;gap:6px;margin:10px 0;}
   .order-thumbs img{width:42px;height:50px;border-radius:6px;object-fit:cover;background:var(--gray-100);}
   .order-total-row{display:flex;justify-content:space-between;align-items:center;margin-top:10px;padding-top:10px;border-top:1px solid var(--gray-100);}
@@ -464,11 +466,11 @@
         <div class="payment-option-sub">Pay when your order arrives</div>
       </div>
     </div>
-    <div class="payment-option" onclick="selectPayment('ONLINE')" id="payOptionONLINE">
+    <div class="payment-option" onclick="selectPayment('ONLINE')" id="payOptionONLINE" style="display:none;">
       <input type="radio" name="payMethod">
       <div>
-        <div class="payment-option-label">Online Payment</div>
-        <div class="payment-option-sub">Pay securely now via card/UPI/wallet</div>
+        <div class="payment-option-label">Pay with UPI</div>
+        <div class="payment-option-sub">Scan a QR or open your UPI app — confirmed automatically</div>
       </div>
     </div>
 
@@ -621,6 +623,7 @@
   };
 </script>
 <script src="invoice.js"></script>
+<script src="gateway.js"></script>
 <script src="user.js"></script>
 </body>
 </html>

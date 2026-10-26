@@ -965,28 +965,15 @@ async function placeOrder(){
       price: cartItemPrice(i)
     }));
 
-    let paymentStatus = 'Unpaid';
-    let orderStatus = 'Pending';
-
+    // UPI: the order + a unique payment amount are created together; the order is marked Paid
+    // only by the verification script (or by the admin) — never by this page.
     if(selectedPayment === 'ONLINE'){
-      // ---------------------------------------------------------
-      // IMPORTANT: Online payment must be verified server-side.
-      // This is a placeholder hook for a real payment gateway
-      // (Razorpay/Stripe/etc). Replace with actual gateway checkout,
-      // then confirm payment via a Cloud Function that verifies the
-      // signature/webhook BEFORE marking paymentStatus = 'Paid'.
-      // We do NOT trust client-side success here.
-      // ---------------------------------------------------------
-      const confirmed = await runOnlinePaymentFlow(subtotal, orderId);
-      if(!confirmed){
-        showToast('Payment was not completed', 'error');
-        btn.disabled = false;
-        btn.textContent = 'Place Order';
-        return;
-      }
-      paymentStatus = 'Pending Verification'; // server verifies & updates to "Paid"
-      orderStatus = 'Pending';
+      await placeUpiOrder({ orderId, name, email, phone, address, city, state, pincode, orderProducts, subtotal });
+      return;
     }
+
+    const paymentStatus = 'Unpaid';
+    const orderStatus = 'Pending';
 
     const { db, doc, setDoc, serverTimestamp } = window._fb;
     await setDoc(doc(db, 'orders', orderId), {
@@ -1036,18 +1023,6 @@ async function placeOrder(){
   }
 }
 window.placeOrder = placeOrder;
-
-async function runOnlinePaymentFlow(amount, orderId){
-  // Placeholder integration point for a real gateway (Razorpay/Stripe/etc).
-  // Replace this function body with the gateway's checkout SDK call.
-  // Return true only after the gateway reports success; actual payment
-  // confirmation/marking as "Paid" must still happen via secure server-side
-  // verification (Cloud Function + webhook), never trusted from the browser alone.
-  return new Promise((resolve) => {
-    const ok = confirm(`Proceed to pay ${fmtMoney(amount)} via configured payment gateway?\n\n(Connect your real gateway here — Razorpay/Stripe/etc.)`);
-    resolve(ok);
-  });
-}
 
 /* ---------------- SAVED ADDRESSES ---------------- */
 function initAddressesListener(){
@@ -1139,6 +1114,66 @@ function showNewAddressForm(){
 }
 window.showNewAddressForm = showNewAddressForm;
 
+/* ---------------- UPI PAYMENT ---------------- */
+let upiCfg = null;
+async function initUpi(){
+  if(!window.Gateway) return;
+  try{ upiCfg = await Gateway.loadConfig(); }catch(e){ console.warn('UPI config not loaded', e); }
+  refreshPaymentOptions();
+}
+// The UPI option only appears when the admin has turned it on and entered a valid UPI ID
+function refreshPaymentOptions(){
+  const el = $('payOptionONLINE');
+  if(!el) return;
+  const on = !!(upiCfg && upiCfg.upiEnabled);
+  el.style.display = on ? '' : 'none';
+  if(!on && selectedPayment === 'ONLINE') selectPayment('COD');
+}
+
+async function placeUpiOrder(f){
+  if(!window.Gateway){ showToast('Online payment is not available right now', 'error'); return; }
+  try{
+    const basePaise = Math.round(f.subtotal * 100);
+    const orderData = {
+      customerName: f.name, customerEmail: f.email, customerPhone: f.phone,
+      address: f.address, city: f.city, state: f.state, pincode: f.pincode,
+      products: f.orderProducts, returnStatus: null, returnReason: null
+    };
+    await Gateway.createUpiOrder({ orderId: f.orderId, uid: currentUser.uid, orderData, basePaise });
+    if($('coSaveAddress').checked){
+      await saveAddressToProfile({ name: f.name, phone: f.phone, address: f.address, city: f.city, state: f.state, pincode: f.pincode });
+    }
+    cart = [];
+    updateCartBadge();
+    closeCheckoutSheet();
+    Gateway.openPaymentSheet(f.orderId, { onPaid: handleUpiPaid, onClose: () => goTo('orders') });
+  }catch(err){
+    console.error(err);
+    const m = String(err && err.message || err);
+    if(m.includes('NO_FREE_SLOT')) showToast('Many payments are in progress right now. Please try again in a minute.', 'error');
+    else if(m.includes('AMOUNT_TOO_SMALL')) showToast('This order is too small for UPI payment. Please choose Cash on Delivery.', 'error');
+    else if(m.includes('UPI_DISABLED')) showToast('UPI payment is not available right now', 'error');
+    else showToast('Could not start the payment: ' + m, 'error');
+  }
+}
+
+function payUpiOrder(orderId){
+  if(!window.Gateway){ showToast('Online payment is not available right now', 'error'); return; }
+  closeOrderDetailSheet();
+  Gateway.openPaymentSheet(orderId, { onPaid: handleUpiPaid });
+}
+window.payUpiOrder = payUpiOrder;
+
+function handleUpiPaid(order){
+  if(window.Invoice){ Invoice.ensure(order.id).catch(err => console.warn('Invoice will be created on first view:', err)); }
+  showOrderSuccessPopup();
+  goTo('orders');
+}
+
+function isAwaitingUpi(o){
+  return o.paymentMethod === 'UPI' && o.paymentStatus === 'Awaiting Payment' && o.orderStatus !== 'Cancelled';
+}
+
 /* ---------------- INVOICES ---------------- */
 // mode: 'view' | 'download' | 'print'   (all logic lives in invoice.js)
 function invoiceAction(orderId, mode){
@@ -1149,6 +1184,7 @@ window.invoiceAction = invoiceAction;
 
 // An invoice exists for every order, except a cancelled order that never got one
 function orderHasInvoiceAccess(o){
+  if(o.paymentStatus === 'Awaiting Payment' && !(o.invoice && o.invoice.number)) return false;   // issued once payment is confirmed
   return !(o.orderStatus === 'Cancelled' && !(o.invoice && o.invoice.number));
 }
 
@@ -1231,6 +1267,10 @@ function renderOrdersPage(){
         <span style="font-weight:800;">${fmtMoney(o.finalTotal)}</span>
       </div>
       ${o.returnStatus ? `<div style="margin-top:8px;"><span class="badge badge-${o.returnStatus==='Approved'?'delivered':(o.returnStatus==='Rejected'?'cancelled':'pending')}">Return: ${escapeHtml(o.returnStatus)}</span></div>` : ''}
+      ${isAwaitingUpi(o) ? `
+      <div class="order-actions" onclick="event.stopPropagation()">
+        <button class="btn btn-primary" onclick="payUpiOrder('${o.id}')">Pay now · ${fmtMoney(o.finalTotal)}</button>
+      </div>` : ''}
       ${orderHasInvoiceAccess(o) ? `
       <div class="order-actions" onclick="event.stopPropagation()">
         <button class="btn btn-outline" onclick="invoiceAction('${o.id}','view')">View Invoice</button>
@@ -1288,6 +1328,10 @@ function openOrderDetail(orderId){
     <div class="pd-desc">${escapeHtml(o.customerName)}<br>${escapeHtml(o.address)}, ${escapeHtml(o.city)}, ${escapeHtml(o.state)} - ${escapeHtml(o.pincode)}<br>${escapeHtml(o.customerPhone)}</div>
     <div class="pd-section-title" style="margin-top:16px;">Payment</div>
     <div class="pd-desc">${escapeHtml(o.paymentMethod)} · <span class="badge badge-${(o.paymentStatus||'unpaid').toLowerCase().replace(/\s/g,'')}">${escapeHtml(o.paymentStatus)}</span></div>
+    ${isAwaitingUpi(o) ? `
+    <div class="order-actions" style="flex-direction:column;margin-top:14px;">
+      <button class="btn btn-primary" onclick="payUpiOrder('${o.id}')">Pay now · ${fmtMoney(o.finalTotal)}</button>
+    </div>` : ''}
     ${orderHasInvoiceAccess(o) ? `
     <div class="pd-section-title" style="margin-top:16px;">Invoice${o.invoice && o.invoice.number ? ' · ' + escapeHtml(o.invoice.number) : ''}</div>
     <div class="order-actions" style="flex-wrap:wrap;">
@@ -1490,6 +1534,7 @@ document.addEventListener('DOMContentLoaded', () => {
       initAuthListener();
       initProductsListener();
       initBannerListener();
+      initUpi();
     }
   }, 50);
 });
