@@ -374,6 +374,7 @@
     if (!first.exists()) throw new Error('Order not found');
     const order0 = { id: first.id, ...first.data() };
     if (order0.invoice && order0.invoice.number && !opts.refresh) return order0;   // already has one
+    if (!order0.invoice && String(order0.paymentStatus) === 'Awaiting Payment') throw new Error('NOT_PAID');
     if (!order0.invoice && String(order0.orderStatus) === 'Cancelled' && !opts.admin) {
       throw new Error('NO_INVOICE_CANCELLED');
     }
@@ -737,6 +738,7 @@
   /* ---- public entry point ---- */
   function friendlyError(e) {
     const msg = String((e && (e.code || e.message)) || e);
+    if (msg.includes('NOT_PAID')) return 'Your invoice will be available once your payment is confirmed.';
     if (msg.includes('NO_INVOICE_CANCELLED')) return 'No invoice was issued for this cancelled order.';
     if (msg.includes('permission-denied') || msg.includes('insufficient permissions')) return "You don't have permission to access this invoice.";
     if (msg.includes('Order not found')) return 'Order not found.';
